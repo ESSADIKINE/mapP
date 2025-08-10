@@ -1,0 +1,11 @@
+# Environment Variables Configuration
+# Copy this content to a new file named .env.local in the root directory
+
+# Map Configuration
+NEXT_PUBLIC_MAP_STYLE=https://demotiles.maplibre.org/style.json
+
+# Backend API
+NEXT_PUBLIC_BACKEND_URL=http://localhost:4000
+
+# Optional: Mapbox (if you want to use Mapbox instead of MapLibre)
+# NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token_here 

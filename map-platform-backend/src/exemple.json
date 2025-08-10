@@ -1,0 +1,36 @@
+{
+    "title": "Casablanca Real Estate Showcase",
+    "logoUrl": "https://res.cloudinary.com/your-cloud/image/upload/logo.png",
+    "description": "Virtual tour of a residence and nearby amenities in Casablanca.",
+    "principal": {
+      "name": "Residence",
+      "latitude": 28.555784441511065,
+      "longitude": 77.08697067257833,
+      "virtualtour": "https://res.cloudinary.com/your-cloud/image/upload/residence_360.jpg",
+      "zoom": 16.418970858853267,
+      "bounds": [
+        [77.09080236565859, 28.559189067210696],
+        [77.06870181771114, 28.540189947521654]
+      ],
+      "heading": -123.33874242235237,
+      "category": "Principal",
+      "footerInfo": { "location": "Oulfa" }
+    },
+    "secondaries": [
+      {
+        "name": "Mosque",
+        "latitude": 28.555784441511065,
+        "longitude": 77.08697067257833,
+        "virtualtour": "https://res.cloudinary.com/your-cloud/image/upload/mosque_360.jpg",
+        "zoom": 16.418970858853267,
+        "bounds": [
+          [77.09080236565859, 28.559189067210696],
+          [77.06870181771114, 28.540189947521654]
+        ],
+        "heading": -123.33874242235237,
+        "category": "Secondary",
+        "footerInfo": { "location": "Medina" }
+      }
+    ]
+  }
+  
