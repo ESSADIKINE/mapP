@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   description: 'Interactive mapping platform for projects and places',
 }
 
+import { MapProvider } from '@/components/map-provider'
 export default function RootLayout({
   children,
 }: {
