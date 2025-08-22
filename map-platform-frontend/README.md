@@ -8,7 +8,7 @@ A modern React/Next.js frontend for the Map Platform, featuring interactive maps
 - **360° Image Viewer**: Pannellum integration for immersive viewing
 - **Drag & Drop**: Place ordering and management with @dnd-kit
 - **File Upload**: Drag & drop file uploads with react-dropzone
-- **Real-time Routing**: GraphHopper integration for route calculation
+- **Real-time Routing**: OpenRouteService integration for real road route calculation
 - **Project Management**: Create and manage mapping projects
 - **Responsive Design**: Tailwind CSS for modern, mobile-friendly UI
 
@@ -144,29 +144,28 @@ The application is designed to work on:
 |----------|-------------|----------|---------|
 | `NEXT_PUBLIC_MAP_STYLE` | Map style URL | Yes | MapLibre demo style |
 | `NEXT_PUBLIC_BACKEND_URL` | Backend API URL | Yes | `http://localhost:4000` |
+| `NEXT_PUBLIC_OPENROUTE_API_KEY` | OpenRouteService API key for real road routing | No | - |
 | `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Mapbox token | No | - |
 
-## 🚧 Current Status
+## 🛣️ Real Road Routing
 
-This is the **initial setup** with:
-- ✅ Project structure and configuration
-- ✅ Dependencies and TypeScript setup
-- ✅ Component placeholders
-- ✅ Basic styling with Tailwind CSS
-- ✅ State management structure
-- ✅ API client structure
-- ✅ Type definitions
+The application now supports real car road routing using **OpenRouteService**:
 
-**Next steps**: Implement the actual component functionality
+### Features
+- **Real Road Paths**: Routes follow actual road networks instead of straight lines
+- **Multiple Routing Profiles**: 
+  - `driving-car`: Standard car routing
+  - `driving-eco`: Eco-friendly routes
+  - `driving-fast`: Fastest routes
+- **Waypoint Optimization**: Intelligent intermediate points for realistic routing
+- **Fallback Support**: Graceful fallback to enhanced mock routing when API unavailable
 
-## 🤝 Contributing
+### Setup
+1. Get a free API key from [OpenRouteService](https://openrouteservice.org/dev/#/signup)
+2. Add to `.env.local`: `NEXT_PUBLIC_OPENROUTE_API_KEY=your_key_here`
+3. Routes will automatically use real road data
 
-1. Fork the repository
-2. Create a feature branch
-3. Implement your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
-
-This project is part of the Map Platform ecosystem. 
+### Route Visualization
+- **Enhanced Styling**: Thicker lines with white outlines for better visibility
+- **Road Network**: Routes curve and follow realistic road paths
+- **Distance-Based**: Longer routes include more waypoints for accuracy

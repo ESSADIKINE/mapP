@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -9,7 +10,6 @@ export const metadata: Metadata = {
   description: 'Interactive mapping platform for projects and places',
 }
 
-import { MapProvider } from '@/components/map-provider'
 export default function RootLayout({
   children,
 }: {

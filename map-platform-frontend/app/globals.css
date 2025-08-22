@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Ensure MapLibre GL elements are visible */
+.maplibregl-canvas {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.maplibregl-canvas-container {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Map container styling */
+.map-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 /* Custom styles can be added here */
 body {
   margin: 0;
