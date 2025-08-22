@@ -8,6 +8,7 @@ import { useDroppable, DndContext, closestCenter, PointerSensor, useSensor, useS
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useDropzone } from 'react-dropzone';
+import { getRoute, formatKm, formatHhMm } from '@/lib/osrm';
 
 // MapLibre needs window -> use dynamic import to avoid SSR issues
 const MapLibreGL = dynamic(() => import('maplibre-gl'), { ssr: false });
@@ -195,113 +196,33 @@ async function computeRoute(projectId, placeId) {
       return res.json(); // {encoded, distance_m, duration_s, pretty}
     }
     
-    // Fallback to OpenRouteService for real road routing
-    console.log('Backend not available, using OpenRouteService for real road routing');
-    
+    // Fallback to OSRM for real road routing
+    console.log('Backend not available, using OSRM for real road routing');
+
     const project = useStudio.getState().project;
     const secondaryPlace = project.secondaries.find(p => p._id === placeId || p.name.includes('Place'));
-    
+
     if (!secondaryPlace) {
       throw new Error('Secondary place not found');
     }
-    
-    // Use OpenRouteService for real road routing
-    const openRouteApiKey = process.env.NEXT_PUBLIC_OPENROUTE_API_KEY;
-    if (!openRouteApiKey) {
-      console.warn('No OpenRouteService API key found, using S-curve routing for realistic paths');
-      return generateSCurveRoute(project.principal, secondaryPlace);
-    }
-    
-    // OpenRouteService API endpoint - use driving-car for realistic car routes
-    const apiUrl = 'https://api.openrouteservice.org/v2/directions/driving-car';
-    
-    // Create route from principal to secondary place with simple coordinates
-    // OpenRouteService expects [longitude, latitude] format
-    const coordinates = [
+
+    const coords = [
       [project.principal.longitude, project.principal.latitude],
       [secondaryPlace.longitude, secondaryPlace.latitude]
     ];
-    
-    // Validate coordinates
-    const isValidCoordinate = (coord) => {
-      return Array.isArray(coord) && 
-             coord.length === 2 && 
-             typeof coord[0] === 'number' && 
-             typeof coord[1] === 'number' &&
-             !isNaN(coord[0]) && 
-             !isNaN(coord[1]) &&
-             coord[0] >= -180 && coord[0] <= 180 && // longitude range
-             coord[1] >= -90 && coord[1] <= 90;     // latitude range
-    };
-    
-    if (!coordinates.every(isValidCoordinate)) {
-      console.warn('Invalid coordinates detected, using S-curve routing');
-      return generateSCurveRoute(project.principal, secondaryPlace);
-    }
-    
-    // Debug the coordinates being sent
-    console.log('OpenRouteService coordinates:', coordinates);
-    console.log('Principal location:', { lng: project.principal.longitude, lat: project.principal.latitude });
-    console.log('Secondary location:', { lng: secondaryPlace.longitude, lat: secondaryPlace.latitude });
-    
-    const requestBody = {
-      coordinates: coordinates,
-      format: 'geojson',
-      preference: 'fastest',
-      units: 'm', // OpenRouteService expects 'm' not 'meters'
-      instructions: false,
-      geometry: true // OpenRouteService expects boolean true, not 'full'
-    };
-    
-    console.log('OpenRouteService request body:', requestBody);
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': openRouteApiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenRouteService error response:', errorText);
-      console.error('Response status:', response.status);
-      console.error('Response headers:', Object.fromEntries(response.headers.entries()));
-      throw new Error(`OpenRouteService API error: ${response.status} - ${errorText}`);
-    }
-    
-    const routeData = await response.json();
-    console.log('OpenRouteService API response:', routeData);
-    
-    if (!routeData.routes || routeData.routes.length === 0) {
-      console.warn('OpenRouteService returned no routes:', routeData);
-      throw new Error('No route found');
-    }
-    
-    const route = routeData.routes[0];
-    const properties = route;
-    
-    // Extract route information
-    const distance = route.distance || 0;
-    const duration = route.duration || 0;
-    
-    // Convert coordinates to polyline format for MapLibre
-    const coordinates_array = route.geometry.coordinates;
-    const polyline = encodePolyline(coordinates_array);
-    
+
+    const { geometry, distanceMeters, durationSeconds } = await getRoute({ coords, profile: 'driving' });
+    const polyline = encodePolyline(geometry.coordinates);
+
     return {
       encoded: polyline,
-      distance_m: Math.round(distance),
-      duration_s: Math.round(duration),
+      distance_m: Math.round(distanceMeters),
+      duration_s: Math.round(durationSeconds),
       pretty: {
-        distance: `${(distance / 1000).toFixed(1)} km`,
-        time: `${Math.round(duration / 60)} min`
+        distance: formatKm(distanceMeters),
+        time: formatHhMm(durationSeconds)
       },
-      // Add GeoJSON for direct rendering
-      geojson: route
+      geojson: { type: 'Feature', properties: {}, geometry }
     };
     
   } catch (error) {
@@ -923,7 +844,7 @@ function MapCanvas() {
         let feature;
         let routeId = `route-${idx}`;
         
-        // Check if we have GeoJSON data (from OpenRouteService)
+        // Check if we have GeoJSON data (from routing API)
         if (s.routeGeoJSON) {
           // Use the actual GeoJSON route data
           feature = s.routeGeoJSON;
