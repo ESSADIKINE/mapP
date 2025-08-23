@@ -1,5 +1,6 @@
 import axios from 'axios';
 import polyline from 'polyline';
+import { isValidObjectId } from 'mongoose';
 import { Project } from '../models/Project.js';
 
 const OSRM_HOST = process.env.OSRM_HOST || 'https://router.project-osrm.org';
@@ -39,6 +40,10 @@ export const getRoute = async (req, res) => {
 
 export const computeAndAttachRouteToSecondary = async (req, res) => {
   const { projectId, placeId } = req.params;
+  if (!isValidObjectId(projectId)) {
+    return res.status(404).json({ error: 'NotFound' });
+  }
+
   const project = await Project.findById(projectId);
   if (!project) return res.status(404).json({ error: 'NotFound' });
 
