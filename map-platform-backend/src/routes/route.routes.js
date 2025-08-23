@@ -3,7 +3,7 @@ import { asyncHandler } from '../middlewares/asyncHandler.js';
 import { getRoute } from '../controllers/route.controller.js';
 
 const router = Router();
-// GET /api/route?from=lat,lng&to=lat,lng
+// GET /api/route?from=lat,lng&to=lat,lng&profile=driving
 router.get('/', asyncHandler(getRoute));
 
 export default router;
