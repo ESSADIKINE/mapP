@@ -6,9 +6,9 @@ NEXT_PUBLIC_MAP_STYLE=https://demotiles.maplibre.org/style.json
 # Backend API
 NEXT_PUBEND_URL=http://localhost:4000
 
-# OpenRouteService API Key for Real Road Routing
-# Get your free API key at: https://openrouteservice.org/dev/#/signup
-NEXT_PUBLIC_OPENROUTE_API_KEY=your_openroute_api_key_here
+# OSRM routing server
+# Defaults to public demo if not set
+NEXT_PUBLIC_OSRM_HOST=http://localhost:5000
 
 # Optional: Mapbox (if you want to use Mapbox instead of MapLibre)
 # NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=your_mapbox_token_here 
