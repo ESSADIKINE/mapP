@@ -8,7 +8,7 @@ A modern React/Next.js frontend for the Map Platform, featuring interactive maps
 - **360° Image Viewer**: Pannellum integration for immersive viewing
 - **Drag & Drop**: Place ordering and management with @dnd-kit
 - **File Upload**: Drag & drop file uploads with react-dropzone
-- **Real-time Routing**: OpenRouteService integration for real road route calculation
+- **Real-time Routing**: OSRM integration for real road route calculation
 - **Project Management**: Create and manage mapping projects
 - **Responsive Design**: Tailwind CSS for modern, mobile-friendly UI
 
@@ -144,28 +144,23 @@ The application is designed to work on:
 |----------|-------------|----------|---------|
 | `NEXT_PUBLIC_MAP_STYLE` | Map style URL | Yes | MapLibre demo style |
 | `NEXT_PUBLIC_BACKEND_URL` | Backend API URL | Yes | `http://localhost:4000` |
-| `NEXT_PUBLIC_OPENROUTE_API_KEY` | OpenRouteService API key for real road routing | No | - |
+| `NEXT_PUBLIC_OSRM_HOST` | OSRM server URL (e.g. http://localhost:5000) | No | router.project-osrm.org |
 | `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Mapbox token | No | - |
 
 ## 🛣️ Real Road Routing
 
-The application now supports real car road routing using **OpenRouteService**:
+The application now supports real road routing using the **Open Source Routing Machine (OSRM)** service.
 
 ### Features
 - **Real Road Paths**: Routes follow actual road networks instead of straight lines
-- **Multiple Routing Profiles**: 
-  - `driving-car`: Standard car routing
-  - `driving-eco`: Eco-friendly routes
-  - `driving-fast`: Fastest routes
-- **Waypoint Optimization**: Intelligent intermediate points for realistic routing
-- **Fallback Support**: Graceful fallback to enhanced mock routing when API unavailable
+- **Supported Profiles**: `driving`, `walking`, `cycling`
+- **Fallback Support**: Graceful fallback to enhanced mock routing when the service is unavailable
 
 ### Setup
-1. Get a free API key from [OpenRouteService](https://openrouteservice.org/dev/#/signup)
-2. Add to `.env.local`: `NEXT_PUBLIC_OPENROUTE_API_KEY=your_key_here`
-3. Routes will automatically use real road data
+1. (Optional) Self-host an OSRM server or use the public demo at `https://router.project-osrm.org`
+2. Add to `.env.local` if self-hosting: `NEXT_PUBLIC_OSRM_HOST=http://localhost:5000`
+3. Routes will automatically use the configured OSRM server
 
 ### Route Visualization
 - **Enhanced Styling**: Thicker lines with white outlines for better visibility
 - **Road Network**: Routes curve and follow realistic road paths
-- **Distance-Based**: Longer routes include more waypoints for accuracy
