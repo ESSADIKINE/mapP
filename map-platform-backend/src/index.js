@@ -36,10 +36,7 @@ app.get('/health', (req, res) => res.json({ ok: true, time: new Date().toISOStri
 
 // Routes
 app.use('/api/projects', projectRoutes);
-app.use('/api/projects/:id/places', (req, res, next) => {
-  req.params.projectId = req.params.id; // normalize
-  next();
-}, placeRoutes);
+app.use('/api/projects/:projectId/places', placeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/route', routeRoutes);
 
