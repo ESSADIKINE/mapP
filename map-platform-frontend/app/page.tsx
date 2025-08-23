@@ -139,14 +139,34 @@ async function uploadImage(file) {
   }
 }
 
+/**
+ * Remove empty-string fields that fail backend validation.
+ * Ensures optional URLs are omitted when not provided.
+ * @param {Project} project
+ */
+function sanitizeProject(project) {
+  const cleanPlace = (p) => ({
+    ...p,
+    virtualtour: p.virtualtour || undefined
+  });
+
+  return {
+    ...project,
+    logoUrl: project.logoUrl || undefined,
+    principal: cleanPlace(project.principal),
+    secondaries: project.secondaries.map(cleanPlace)
+  };
+}
+
 async function saveProject(project) {
   const backend = useStudio.getState().backend;
-  
+
   try {
+    const payload = sanitizeProject(project);
     const res = await fetch(`${backend}/api/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(project)
+      body: JSON.stringify(payload)
     });
     
     if (!res.ok) {
