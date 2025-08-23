@@ -841,9 +841,11 @@ function MapCanvas() {
       mapInstance.__markers.push(mk);
     });
 
-    // Routes: remove existing layers
+    // Routes: remove existing layers/sources (ensure layers removed before sources)
     const routeIds = (mapInstance.__routeIds || []);
     routeIds.forEach((id) => {
+      const outlineId = `${id}-outline`;
+      if (mapInstance.getLayer(outlineId)) mapInstance.removeLayer(outlineId);
       if (mapInstance.getLayer(id)) mapInstance.removeLayer(id);
       if (mapInstance.getSource(id)) mapInstance.removeSource(id);
     });
@@ -916,7 +918,8 @@ function MapCanvas() {
           }
         }, routeId); // Insert below the main route line
         
-        mapInstance.__routeIds.push(routeId, `${routeId}-outline`);
+        // Track base route IDs so we can clean layers/sources safely later
+        mapInstance.__routeIds.push(routeId);
         
         console.log(`Route ${idx} added to map:`, feature);
       } catch (error) {
