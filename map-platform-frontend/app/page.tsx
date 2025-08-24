@@ -1086,7 +1086,7 @@ function SecondaryCard({ place, index, projectId }) {
 // Main Page
 
 export default function MappingStudio() {
-  const { project, updateProject, reorderSecondaries } = useStudio();
+  const { project, updateProject, reorderSecondaries, backend, mapStyle } = useStudio();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1110,6 +1110,45 @@ export default function MappingStudio() {
     reorderSecondaries(from, to);
   };
 
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [expOpts, setExpOpts] = useState({
+    mirrorImagesLocally: true,
+    inlineData: false,
+    includeLocalLibs: true,
+    styleURL: mapStyle,
+    profiles: ['driving']
+  });
+
+  async function doExport() {
+    if (!project._id) {
+      alert('Save project first');
+      return;
+    }
+    setExporting(true);
+    try {
+      const res = await fetch(`${backend}/api/projects/${project._id}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(expOpts)
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.title || 'project'}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Export failed');
+    }
+    setExporting(false);
+    setExportOpen(false);
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
@@ -1127,10 +1166,10 @@ export default function MappingStudio() {
               value={project.description || ''}
               onChange={(e) => updateProject({ description: e.target.value })} />
           </div>
-          <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white" onClick={onSave}>Save</button>
-          <button className="px-4 py-2 rounded-xl bg-gray-900 text-white" onClick={() => alert('Export flow handled in Next.js build step')}>Export</button>
-        </div>
-      </header>
+            <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white" onClick={onSave}>Save</button>
+            <button className="px-4 py-2 rounded-xl bg-gray-900 text-white" onClick={() => setExportOpen(true)}>Export</button>
+          </div>
+        </header>
 
       <main className="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
         <section className="lg:col-span-1 space-y-4">
@@ -1189,10 +1228,28 @@ export default function MappingStudio() {
           </div>
           <p className="text-xs text-gray-500 mt-2">Tip: Click on the map to add a new secondary marker at that location.</p>
         </section>
-      </main>
-    </div>
-  );
-}
+        </main>
+
+        {exportOpen && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
+            <div className="bg-white p-4 rounded-xl w-80 space-y-2">
+              <h3 className="font-semibold text-lg">Export Project</h3>
+              <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.mirrorImagesLocally} onChange={e=>setExpOpts({...expOpts, mirrorImagesLocally:e.target.checked})}/>Mirror images locally</label>
+              <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.inlineData} onChange={e=>setExpOpts({...expOpts, inlineData:e.target.checked})}/>Inline data</label>
+              <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.includeLocalLibs} onChange={e=>setExpOpts({...expOpts, includeLocalLibs:e.target.checked})}/>Include local libs</label>
+              <label className="block text-sm">Style URL
+                <input className="w-full mt-1 rounded border p-1" value={expOpts.styleURL} onChange={e=>setExpOpts({...expOpts, styleURL:e.target.value})}/>
+              </label>
+              <div className="flex justify-end gap-2 pt-2">
+                <button className="px-3 py-1 rounded bg-gray-200" onClick={()=>setExportOpen(false)}>Cancel</button>
+                <button className="px-3 py-1 rounded bg-indigo-600 text-white" onClick={doExport}>{exporting ? 'Preparing…' : 'Export'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
 // ────────────────────────────────────────────────────────────────────────────────
 // Logo uploader

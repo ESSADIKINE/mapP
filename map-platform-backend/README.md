@@ -59,6 +59,7 @@ npm start
 - `GET /api/projects/:id/places` - List places in project
 - `POST /api/upload` - File upload
 - `GET /api/route` - Route calculation
+- `POST /api/projects/:id/export` - Stream project as static ZIP bundle
 
 ## Troubleshooting
 
