@@ -64,7 +64,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
       id: String(doc._id),
       title: doc.title,
       description: doc.description || '',
-      styleURL: styleURL || doc.styleURL || 'https://demotiles.maplibre.org/style.json',
+      styleURL: styleURL || 'https://demotiles.maplibre.org/style.json',
       logo: doc.logoUrl ? { src: doc.logoUrl, alt: 'Logo' } : null,
       units: 'metric'
     },

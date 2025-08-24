@@ -30,12 +30,22 @@
     }
   });
 
-  const menu = document.getElementById('menu');
+  const menu = document.getElementById('projectsMenu');
   const pano = document.getElementById('pano');
   const routeBtn = document.getElementById('routeBtn');
+  const homeLink = document.querySelector('#mainMenu > li:first-child > a');
+  if (homeLink) {
+    homeLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      map.flyTo({ center:[data.principal.lon, data.principal.lat], zoom:data.principal.zoom||13 });
+      pano.style.display = 'none';
+      routeBtn.style.display = 'none';
+    });
+  }
   let viewer;
 
   data.secondaries.forEach(s => {
+    const li = document.createElement('li');
     const btn = document.createElement('button');
     btn.textContent = s.name;
     btn.addEventListener('click', () => {
@@ -65,6 +75,7 @@
         routeBtn.onclick = null;
       }
     });
-    menu.appendChild(btn);
+    li.appendChild(btn);
+    menu.appendChild(li);
   });
 })();
