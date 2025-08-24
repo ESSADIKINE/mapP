@@ -7,7 +7,20 @@
   {{LIB_STYLES}}
 </head>
 <body>
+  <header id="header">
+    <nav>
+      <ul id="mainMenu">
+        <li><a href="#">Home</a></li>
+        <li><a href="#">About Us</a></li>
+        <li class="projects"><a href="#">Projects</a>
+          <ul id="projectsMenu"></ul>
+        </li>
+      </ul>
+    </nav>
+    <button id="routeBtn" style="display:none">Show Route</button>
+  </header>
   <div id="map" class="map"></div>
+  <div id="pano" class="pano"></div>
   {{INLINE_DATA}}
   {{LIB_SCRIPTS}}
   <script src="./assets/js/app.js"></script>

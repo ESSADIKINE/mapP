@@ -32,12 +32,14 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
   const secondaries = (doc.secondaries || []).map((s) => {
     const routes = [];
     if (s.routesFromBase && s.routesFromBase.length) {
-      const coords = decodePolyline(s.routesFromBase[0]);
-      routes.push({
-        profile: profiles[0] || 'driving',
-        distance_m: null,
-        duration_s: null,
-        geometry: { type: 'LineString', coordinates: coords }
+      s.routesFromBase.forEach((poly, idx) => {
+        const coords = decodePolyline(poly);
+        routes.push({
+          profile: profiles[idx] || profiles[0] || 'driving',
+          distance_m: null,
+          duration_s: null,
+          geometry: { type: 'LineString', coordinates: coords }
+        });
       });
     }
     return {
@@ -62,7 +64,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
       id: String(doc._id),
       title: doc.title,
       description: doc.description || '',
-      styleURL: styleURL || doc.styleURL || 'https://demotiles.maplibre.org/style.json',
+      styleURL: styleURL || 'https://demotiles.maplibre.org/style.json',
       logo: doc.logoUrl ? { src: doc.logoUrl, alt: 'Logo' } : null,
       units: 'metric'
     },
