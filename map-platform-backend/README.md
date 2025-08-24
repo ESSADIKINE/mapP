@@ -60,7 +60,6 @@ npm start
 - `POST /api/upload` - File upload
 - `GET /api/route` - Route calculation
 - `POST /api/projects/:id/export` - Stream project as static ZIP bundle
-
 ### Export Bundles
 To include MapLibre and Pannellum assets locally in the exported bundle, install
 `maplibre-gl` and `pannellum` in the backend. If these packages are not
