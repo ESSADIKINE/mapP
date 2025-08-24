@@ -22,8 +22,7 @@ Create a `.env` file in the root directory with the following variables:
 - `CORS_ORIGIN`: Allowed CORS origins
 
 **Optional:**
-- `MAPBOX_ACCESS_TOKEN`: For Mapbox integration
-- `GRAPHHOPPER_API_KEY`: For GraphHopper routing
+- `OSRM_HOST`: Custom OSRM server (defaults to router.project-osrm.org)
 - `CLOUDINARY_*`: For Cloudinary file uploads
 
 ### 3. MongoDB Setup
@@ -59,7 +58,8 @@ npm start
 - `POST /api/projects` - Create project
 - `GET /api/projects/:id/places` - List places in project
 - `POST /api/upload` - File upload
-- `POST /api/route` - Route calculation
+- `GET /api/route` - Route calculation
+- `POST /api/projects/:id/export` - Stream project as static ZIP bundle
 
 ## Troubleshooting
 

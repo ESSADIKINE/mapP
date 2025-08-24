@@ -1,58 +1,36 @@
 import axios from 'axios';
 import polyline from 'polyline';
+import { isValidObjectId } from 'mongoose';
 import { Project } from '../models/Project.js';
 
-const useMapbox = !!process.env.MAPBOX_ACCESS_TOKEN;
+const OSRM_HOST = process.env.OSRM_HOST || 'https://router.project-osrm.org';
 
-async function fetchRouteMapbox({ from, to }) {
-  const token = process.env.MAPBOX_ACCESS_TOKEN;
-  const profile = process.env.MAPBOX_PROFILE || 'driving';
-  const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${from.lng},${from.lat};${to.lng},${to.lat}`;
+async function fetchRouteOSRM({ from, to, profile = 'driving' }) {
+  const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+  const url = `${OSRM_HOST}/route/v1/${profile}/${coords}`;
   const { data } = await axios.get(url, {
-    params: { access_token: token, geometries: 'polyline', overview: 'full' }
+    params: {
+      overview: 'full',
+      geometries: 'geojson',
+      steps: false,
+      alternatives: false
+    }
   });
   const route = data?.routes?.[0];
   if (!route) throw new Error('NoRoute');
-  return {
-    distance: route.distance, // meters
-    duration: route.duration, // seconds
-    encoded: route.geometry
-  };
-}
-
-async function fetchRouteGraphHopper({ from, to }) {
-  const base = process.env.GRAPHHOPPER_BASE_URL;
-  const key = process.env.GRAPHHOPPER_API_KEY;
-  if (!base || !key) throw new Error('GraphHopperNotConfigured');
-  const { data } = await axios.get(`${base}/route`, {
-    params: {
-      point: [`${from.lat},${from.lng}`, `${to.lat},${to.lng}`],
-      key,
-      profile: 'car',
-      points_encoded: true
-    },
-    paramsSerializer: p => new URLSearchParams(p).toString()
-  });
-  const path = data?.paths?.[0];
-  if (!path) throw new Error('NoRoute');
-  return {
-    distance: path.distance,
-    duration: path.time / 1000,
-    encoded: path.points
-  };
+  const encoded = polyline.encode(route.geometry.coordinates.map(([lng, lat]) => [lat, lng]));
+  return { distance: route.distance, duration: route.duration, encoded };
 }
 
 export const getRoute = async (req, res) => {
   const [fromLat, fromLng] = (req.query.from || '').split(',').map(Number);
   const [toLat, toLng] = (req.query.to || '').split(',').map(Number);
+  const profile = req.query.profile || 'driving';
   if (!fromLat || !fromLng || !toLat || !toLng) {
     return res.status(400).json({ error: 'InvalidCoordinates' });
   }
-
-  const args = { from: { lat: fromLat, lng: fromLng }, to: { lat: toLat, lng: toLng } };
-
   try {
-    const r = useMapbox ? await fetchRouteMapbox(args) : await fetchRouteGraphHopper(args);
+    const r = await fetchRouteOSRM({ from: { lat: fromLat, lng: fromLng }, to: { lat: toLat, lng: toLng }, profile });
     return res.json(r);
   } catch (e) {
     console.error('Route error:', e.message);
@@ -62,6 +40,10 @@ export const getRoute = async (req, res) => {
 
 export const computeAndAttachRouteToSecondary = async (req, res) => {
   const { projectId, placeId } = req.params;
+  if (!isValidObjectId(projectId)) {
+    return res.status(404).json({ error: 'NotFound' });
+  }
+
   const project = await Project.findById(projectId);
   if (!project) return res.status(404).json({ error: 'NotFound' });
 
@@ -72,16 +54,13 @@ export const computeAndAttachRouteToSecondary = async (req, res) => {
   const to = { lat: secondary.latitude, lng: secondary.longitude };
 
   try {
-    const r = useMapbox ? await fetchRouteMapbox({ from, to }) : await fetchRouteGraphHopper({ from, to });
-    // human-friendly values
+    const profile = req.query.profile || 'driving';
+    const r = await fetchRouteOSRM({ from, to, profile });
     const km = (r.distance / 1000).toFixed(1) + ' KM';
     const mins = Math.round(r.duration / 60) + ' mins';
-
-    // attach
     secondary.routesFromBase = [r.encoded];
     secondary.footerInfo = { ...(secondary.footerInfo || {}), distance: km, time: mins };
     await project.save();
-
     return res.json({
       encoded: r.encoded,
       distance_m: r.distance,

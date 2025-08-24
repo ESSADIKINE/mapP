@@ -1,4 +1,5 @@
 import { Project } from '../models/Project.js';
+import { exportProject as exportSrv } from '../services/export.service.js';
 
 export const createProject = async (req, res) => {
   const project = await Project.create(req.body);
@@ -26,4 +27,8 @@ export const deleteProject = async (req, res) => {
   const deleted = await Project.findByIdAndDelete(req.params.id);
   if (!deleted) return res.status(404).json({ error: 'NotFound' });
   res.json({ ok: true });
+};
+
+export const exportProject = async (req, res) => {
+  await exportSrv(req.params.id, req.body || {}, res);
 };

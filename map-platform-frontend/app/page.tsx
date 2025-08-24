@@ -8,6 +8,7 @@ import { useDroppable, DndContext, closestCenter, PointerSensor, useSensor, useS
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useDropzone } from 'react-dropzone';
+import { getRoute, formatKm, formatHhMm } from '@/lib/osrm';
 
 // MapLibre needs window -> use dynamic import to avoid SSR issues
 const MapLibreGL = dynamic(() => import('maplibre-gl'), { ssr: false });
@@ -138,14 +139,34 @@ async function uploadImage(file) {
   }
 }
 
+/**
+ * Remove empty-string fields that fail backend validation.
+ * Ensures optional URLs are omitted when not provided.
+ * @param {Project} project
+ */
+function sanitizeProject(project) {
+  const cleanPlace = (p) => ({
+    ...p,
+    virtualtour: p.virtualtour || undefined
+  });
+
+  return {
+    ...project,
+    logoUrl: project.logoUrl || undefined,
+    principal: cleanPlace(project.principal),
+    secondaries: project.secondaries.map(cleanPlace)
+  };
+}
+
 async function saveProject(project) {
   const backend = useStudio.getState().backend;
-  
+
   try {
+    const payload = sanitizeProject(project);
     const res = await fetch(`${backend}/api/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(project)
+      body: JSON.stringify(payload)
     });
     
     if (!res.ok) {
@@ -195,113 +216,33 @@ async function computeRoute(projectId, placeId) {
       return res.json(); // {encoded, distance_m, duration_s, pretty}
     }
     
-    // Fallback to OpenRouteService for real road routing
-    console.log('Backend not available, using OpenRouteService for real road routing');
-    
+    // Fallback to OSRM for real road routing
+    console.log('Backend not available, using OSRM for real road routing');
+
     const project = useStudio.getState().project;
     const secondaryPlace = project.secondaries.find(p => p._id === placeId || p.name.includes('Place'));
-    
+
     if (!secondaryPlace) {
       throw new Error('Secondary place not found');
     }
-    
-    // Use OpenRouteService for real road routing
-    const openRouteApiKey = process.env.NEXT_PUBLIC_OPENROUTE_API_KEY;
-    if (!openRouteApiKey) {
-      console.warn('No OpenRouteService API key found, using S-curve routing for realistic paths');
-      return generateSCurveRoute(project.principal, secondaryPlace);
-    }
-    
-    // OpenRouteService API endpoint - use driving-car for realistic car routes
-    const apiUrl = 'https://api.openrouteservice.org/v2/directions/driving-car';
-    
-    // Create route from principal to secondary place with simple coordinates
-    // OpenRouteService expects [longitude, latitude] format
-    const coordinates = [
+
+    const coords = [
       [project.principal.longitude, project.principal.latitude],
       [secondaryPlace.longitude, secondaryPlace.latitude]
     ];
-    
-    // Validate coordinates
-    const isValidCoordinate = (coord) => {
-      return Array.isArray(coord) && 
-             coord.length === 2 && 
-             typeof coord[0] === 'number' && 
-             typeof coord[1] === 'number' &&
-             !isNaN(coord[0]) && 
-             !isNaN(coord[1]) &&
-             coord[0] >= -180 && coord[0] <= 180 && // longitude range
-             coord[1] >= -90 && coord[1] <= 90;     // latitude range
-    };
-    
-    if (!coordinates.every(isValidCoordinate)) {
-      console.warn('Invalid coordinates detected, using S-curve routing');
-      return generateSCurveRoute(project.principal, secondaryPlace);
-    }
-    
-    // Debug the coordinates being sent
-    console.log('OpenRouteService coordinates:', coordinates);
-    console.log('Principal location:', { lng: project.principal.longitude, lat: project.principal.latitude });
-    console.log('Secondary location:', { lng: secondaryPlace.longitude, lat: secondaryPlace.latitude });
-    
-    const requestBody = {
-      coordinates: coordinates,
-      format: 'geojson',
-      preference: 'fastest',
-      units: 'm', // OpenRouteService expects 'm' not 'meters'
-      instructions: false,
-      geometry: true // OpenRouteService expects boolean true, not 'full'
-    };
-    
-    console.log('OpenRouteService request body:', requestBody);
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': openRouteApiKey,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenRouteService error response:', errorText);
-      console.error('Response status:', response.status);
-      console.error('Response headers:', Object.fromEntries(response.headers.entries()));
-      throw new Error(`OpenRouteService API error: ${response.status} - ${errorText}`);
-    }
-    
-    const routeData = await response.json();
-    console.log('OpenRouteService API response:', routeData);
-    
-    if (!routeData.routes || routeData.routes.length === 0) {
-      console.warn('OpenRouteService returned no routes:', routeData);
-      throw new Error('No route found');
-    }
-    
-    const route = routeData.routes[0];
-    const properties = route;
-    
-    // Extract route information
-    const distance = route.distance || 0;
-    const duration = route.duration || 0;
-    
-    // Convert coordinates to polyline format for MapLibre
-    const coordinates_array = route.geometry.coordinates;
-    const polyline = encodePolyline(coordinates_array);
-    
+
+    const { geometry, distanceMeters, durationSeconds } = await getRoute({ coords, profile: 'driving' });
+    const polyline = encodePolyline(geometry.coordinates);
+
     return {
       encoded: polyline,
-      distance_m: Math.round(distance),
-      duration_s: Math.round(duration),
+      distance_m: Math.round(distanceMeters),
+      duration_s: Math.round(durationSeconds),
       pretty: {
-        distance: `${(distance / 1000).toFixed(1)} km`,
-        time: `${Math.round(duration / 60)} min`
+        distance: formatKm(distanceMeters),
+        time: formatHhMm(durationSeconds)
       },
-      // Add GeoJSON for direct rendering
-      geojson: route
+      geojson: { type: 'Feature', properties: {}, geometry }
     };
     
   } catch (error) {
@@ -900,9 +841,11 @@ function MapCanvas() {
       mapInstance.__markers.push(mk);
     });
 
-    // Routes: remove existing layers
+    // Routes: remove existing layers/sources (ensure layers removed before sources)
     const routeIds = (mapInstance.__routeIds || []);
     routeIds.forEach((id) => {
+      const outlineId = `${id}-outline`;
+      if (mapInstance.getLayer(outlineId)) mapInstance.removeLayer(outlineId);
       if (mapInstance.getLayer(id)) mapInstance.removeLayer(id);
       if (mapInstance.getSource(id)) mapInstance.removeSource(id);
     });
@@ -923,7 +866,7 @@ function MapCanvas() {
         let feature;
         let routeId = `route-${idx}`;
         
-        // Check if we have GeoJSON data (from OpenRouteService)
+        // Check if we have GeoJSON data (from routing API)
         if (s.routeGeoJSON) {
           // Use the actual GeoJSON route data
           feature = s.routeGeoJSON;
@@ -975,7 +918,8 @@ function MapCanvas() {
           }
         }, routeId); // Insert below the main route line
         
-        mapInstance.__routeIds.push(routeId, `${routeId}-outline`);
+        // Track base route IDs so we can clean layers/sources safely later
+        mapInstance.__routeIds.push(routeId);
         
         console.log(`Route ${idx} added to map:`, feature);
       } catch (error) {
@@ -1142,7 +1086,7 @@ function SecondaryCard({ place, index, projectId }) {
 // Main Page
 
 export default function MappingStudio() {
-  const { project, updateProject, reorderSecondaries } = useStudio();
+  const { project, updateProject, reorderSecondaries, backend, mapStyle } = useStudio();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -1166,6 +1110,45 @@ export default function MappingStudio() {
     reorderSecondaries(from, to);
   };
 
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [expOpts, setExpOpts] = useState({
+    mirrorImagesLocally: true,
+    inlineData: false,
+    includeLocalLibs: true,
+    styleURL: mapStyle,
+    profiles: ['driving']
+  });
+
+  async function doExport() {
+    if (!project._id) {
+      alert('Save project first');
+      return;
+    }
+    setExporting(true);
+    try {
+      const res = await fetch(`${backend}/api/projects/${project._id}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(expOpts)
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.title || 'project'}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert('Export failed');
+    }
+    setExporting(false);
+    setExportOpen(false);
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
@@ -1183,10 +1166,10 @@ export default function MappingStudio() {
               value={project.description || ''}
               onChange={(e) => updateProject({ description: e.target.value })} />
           </div>
-          <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white" onClick={onSave}>Save</button>
-          <button className="px-4 py-2 rounded-xl bg-gray-900 text-white" onClick={() => alert('Export flow handled in Next.js build step')}>Export</button>
-        </div>
-      </header>
+            <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white" onClick={onSave}>Save</button>
+            <button className="px-4 py-2 rounded-xl bg-gray-900 text-white" onClick={() => setExportOpen(true)}>Export</button>
+          </div>
+        </header>
 
       <main className="max-w-7xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
         <section className="lg:col-span-1 space-y-4">
@@ -1245,10 +1228,28 @@ export default function MappingStudio() {
           </div>
           <p className="text-xs text-gray-500 mt-2">Tip: Click on the map to add a new secondary marker at that location.</p>
         </section>
-      </main>
-    </div>
-  );
-}
+        </main>
+
+        {exportOpen && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
+            <div className="bg-white p-4 rounded-xl w-80 space-y-2">
+              <h3 className="font-semibold text-lg">Export Project</h3>
+              <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.mirrorImagesLocally} onChange={e=>setExpOpts({...expOpts, mirrorImagesLocally:e.target.checked})}/>Mirror images locally</label>
+              <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.inlineData} onChange={e=>setExpOpts({...expOpts, inlineData:e.target.checked})}/>Inline data</label>
+              <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.includeLocalLibs} onChange={e=>setExpOpts({...expOpts, includeLocalLibs:e.target.checked})}/>Include local libs</label>
+              <label className="block text-sm">Style URL
+                <input className="w-full mt-1 rounded border p-1" value={expOpts.styleURL} onChange={e=>setExpOpts({...expOpts, styleURL:e.target.value})}/>
+              </label>
+              <div className="flex justify-end gap-2 pt-2">
+                <button className="px-3 py-1 rounded bg-gray-200" onClick={()=>setExportOpen(false)}>Cancel</button>
+                <button className="px-3 py-1 rounded bg-indigo-600 text-white" onClick={doExport}>{exporting ? 'Preparing…' : 'Export'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
 // ────────────────────────────────────────────────────────────────────────────────
 // Logo uploader
