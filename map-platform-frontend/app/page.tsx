@@ -972,12 +972,39 @@ function SecondaryCard({ place, index, projectId }) {
         pid = saved._id;
       }
       
-      // Ensure secondary place has an _id (after a save)
-      const updatedProject = useStudio.getState().project;
-      const refreshedPlace = updatedProject.secondaries[index];
-      
-      // Use a more reliable ID generation
-      const placeId = refreshedPlace._id || `place-${pid}-${index}-${Date.now()}`;
+      // Ensure secondary place exists in backend and has a real _id
+      let updatedProject = useStudio.getState().project;
+      let refreshedPlace = updatedProject.secondaries[index];
+      let placeId = refreshedPlace._id;
+
+      if (!placeId) {
+        // Persist this secondary place to backend to get a real ObjectId
+        const payload = {
+          name: refreshedPlace.name,
+          latitude: refreshedPlace.latitude,
+          longitude: refreshedPlace.longitude,
+          category: refreshedPlace.category || 'Secondary',
+          virtualtour: refreshedPlace.virtualtour || undefined,
+          heading: refreshedPlace.heading || undefined,
+          zoom: refreshedPlace.zoom || undefined,
+          bounds: refreshedPlace.bounds || undefined,
+          footerInfo: refreshedPlace.footerInfo || undefined
+        };
+        const res = await fetch(`${backend}/api/projects/${pid}/places`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          throw new Error('Failed to create place before routing');
+        }
+        const created = await res.json();
+        placeId = created._id;
+        // Update local store with the backend-assigned _id
+        replaceSecondary(index, { _id: placeId });
+        updatedProject = useStudio.getState().project;
+        refreshedPlace = updatedProject.secondaries[index];
+      }
       
       console.log('Computing route for:', { pid, placeId, place: refreshedPlace.name });
       
@@ -1116,8 +1143,9 @@ export default function MappingStudio() {
     mirrorImagesLocally: true,
     inlineData: false,
     includeLocalLibs: true,
-    styleURL: mapStyle,
-    profiles: ['driving']
+    styleURL: 'satellite',
+    profiles: ['driving'],
+    includeRoutes: true
   });
 
   async function doExport() {
@@ -1237,8 +1265,9 @@ export default function MappingStudio() {
               <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.mirrorImagesLocally} onChange={e=>setExpOpts({...expOpts, mirrorImagesLocally:e.target.checked})}/>Mirror images locally</label>
               <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.inlineData} onChange={e=>setExpOpts({...expOpts, inlineData:e.target.checked})}/>Inline data</label>
               <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.includeLocalLibs} onChange={e=>setExpOpts({...expOpts, includeLocalLibs:e.target.checked})}/>Include local libs</label>
-              <label className="block text-sm">Style URL
-                <input className="w-full mt-1 rounded border p-1" value={expOpts.styleURL} onChange={e=>setExpOpts({...expOpts, styleURL:e.target.value})}/>
+              <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.includeRoutes} onChange={e=>setExpOpts({...expOpts, includeRoutes:e.target.checked})}/>Include routes</label>
+              <label className="block text-sm">Map Style (Satellite by default)
+                <input className="w-full mt-1 rounded border p-1" value={expOpts.styleURL} onChange={e=>setExpOpts({...expOpts, styleURL:e.target.value})} placeholder="satellite"/>
               </label>
               <div className="flex justify-end gap-2 pt-2">
                 <button className="px-3 py-1 rounded bg-gray-200" onClick={()=>setExportOpen(false)}>Cancel</button>

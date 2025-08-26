@@ -36,8 +36,8 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
         const coords = decodePolyline(poly);
         routes.push({
           profile: profiles[idx] || profiles[0] || 'driving',
-          distance_m: null,
-          duration_s: null,
+          distance_m: s.footerInfo?.distance ? parseInt(s.footerInfo.distance.replace(/\D/g, '')) : null,
+          duration_s: s.footerInfo?.time ? parseInt(s.footerInfo.time.replace(/\D/g, '')) * 60 : null,
           geometry: { type: 'LineString', coordinates: coords }
         });
       });
@@ -64,7 +64,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
       id: String(doc._id),
       title: doc.title,
       description: doc.description || '',
-      styleURL: styleURL || 'https://demotiles.maplibre.org/style.json',
+      styleURL: styleURL || 'satellite',
       logo: doc.logoUrl ? { src: doc.logoUrl, alt: 'Logo' } : null,
       units: 'metric'
     },

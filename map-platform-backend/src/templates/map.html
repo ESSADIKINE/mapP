@@ -1,26 +1,50 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{TITLE}}</title>
   <link rel="stylesheet" href="./assets/css/styles.css" />
   {{LIB_STYLES}}
 </head>
 <body>
-  <header id="header">
+  <!-- Header -->
+  <header id="header" class="header">
+    <div class="logo">◆ROF PRAMASA</div>
     <nav>
-      <ul id="mainMenu">
-        <li><a href="#">Home</a></li>
-        <li><a href="#">About Us</a></li>
-        <li class="projects"><a href="#">Projects</a>
-          <ul id="projectsMenu"></ul>
-        </li>
+      <ul id="mainMenu" class="nav-menu">
+        <li><a href="#" class="active" onclick="showHome()">Home</a></li>
+        <li><a href="#" onclick="showAbout()">About Us</a></li>
+        <li><a href="#" onclick="showProjects()">Projects</a></li>
       </ul>
     </nav>
-    <button id="routeBtn" style="display:none">Show Route</button>
+    <div class="header-icons">
+      <div class="header-icon" onclick="goHome()">🏠</div>
+      <div class="header-icon" onclick="toggleMenu()">⚙️</div>
+    </div>
   </header>
-  <div id="map" class="map"></div>
-  <div id="pano" class="pano"></div>
+
+  <!-- Main Container (map only) -->
+  <div class="main-container">
+    <div class="map-container">
+      <div id="map" class="map"></div>
+    </div>
+
+    <!-- Right-side info card (hidden by default) -->
+    <aside id="infoPanel" class="info-panel hidden">
+      <div class="info-header">
+        <div id="infoTitle" class="info-title">Place</div>
+        <button class="info-close" onclick="hideInfoPanel()">×</button>
+      </div>
+      <div class="info-body">
+        <div id="panoSmall" class="pano-small"></div>
+        <div class="info-actions">
+          <button id="showRouteBtn" class="route-button" onclick="showRoute()">Show Route</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
   {{INLINE_DATA}}
   {{LIB_SCRIPTS}}
   <script src="./assets/js/app.js"></script>
