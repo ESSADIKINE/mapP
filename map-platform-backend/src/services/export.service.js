@@ -91,9 +91,10 @@ export async function exportProject(projectId, options, res) {
   // temp dir
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'export-'));
   const assetsDir = path.join(tmpDir, 'assets');
+  const imagesDir = path.join(tmpDir, 'images');
   await fs.promises.mkdir(path.join(assetsDir, 'js'), { recursive: true });
   await fs.promises.mkdir(path.join(assetsDir, 'css'), { recursive: true });
-  await fs.promises.mkdir(path.join(assetsDir, 'img'), { recursive: true });
+  await fs.promises.mkdir(imagesDir, { recursive: true });
 
   // logo asset handling
   if (data.project.logo?.src) {
@@ -101,9 +102,9 @@ export async function exportProject(projectId, options, res) {
       try {
         const url = data.project.logo.src;
         const ext = path.extname(new URL(url).pathname) || '.png';
-        const dest = path.join(assetsDir, 'img', `logo${ext}`);
+        const dest = path.join(imagesDir, `logo${ext}`);
         await download(url, dest);
-        data.project.logo.src = `./assets/img/logo${ext}`;
+        data.project.logo.src = `./images/logo${ext}`;
       } catch {
         // keep remote URL on failure
       }
