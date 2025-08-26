@@ -111,6 +111,28 @@ export async function exportProject(projectId, options, res) {
     }
   }
 
+  // mirror panorama images when requested so 360° views work offline
+  const mirrorPanorama = async (url, name) => {
+    if (!mirrorImagesLocally) return url;
+    try {
+      const ext = path.extname(new URL(url).pathname) || '.jpg';
+      const dest = path.join(imagesDir, `${name}${ext}`);
+      await download(url, dest);
+      return `./images/${name}${ext}`;
+    } catch {
+      return url; // fall back to remote URL on error
+    }
+  };
+
+  if (data.principal.virtualtour) {
+    data.principal.virtualtour = await mirrorPanorama(data.principal.virtualtour, 'pano-principal');
+  }
+  for (const s of data.secondaries) {
+    if (s.virtualtour) {
+      s.virtualtour = await mirrorPanorama(s.virtualtour, `pano-${s.id}`);
+    }
+  }
+
   // data/project.json unless we inline
   if (!inlineData) {
     const dataDir = path.join(tmpDir, 'data');
