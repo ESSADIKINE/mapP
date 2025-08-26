@@ -10,6 +10,9 @@ import { slugify } from '../utils/slug.js';
 import { download } from '../utils/download.js';
 
 /**
+ * Nimport { download } from '../utils/download.js';
+
+/**
  * Normalize the DB doc into the export JSON consumed by the static bundle.
  */
 export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) {
@@ -105,6 +108,8 @@ export async function exportProject(projectId, options, res) {
         const dest = path.join(imagesDir, `logo${ext}`);
         await download(url, dest);
         data.project.logo.src = `./images/logo${ext}`;
+
+o${ext}`;
       } catch {
         // keep remote URL on failure
       }
