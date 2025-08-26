@@ -7,6 +7,7 @@ import archiver from 'archiver';
 import { Project } from '../models/Project.js';
 import { decodePolyline } from '../utils/polyline.js';
 import { slugify } from '../utils/slug.js';
+import { download } from '../utils/download.js';
 
 /**
  * Nimport { download } from '../utils/download.js';
@@ -92,7 +93,8 @@ export async function exportProject(projectId, options, res) {
 
   // temp dir
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'export-'));
-  const assetsDir = path.join(tmpDir, '  const imagesDir = path.join(tmpDir, 'images');
+  const assetsDir = path.join(tmpDir, 'assets');
+  const imagesDir = path.join(tmpDir, 'images');
   await fs.promises.mkdir(path.join(assetsDir, 'js'), { recursive: true });
   await fs.promises.mkdir(path.join(assetsDir, 'css'), { recursive: true });
   await fs.promises.mkdir(imagesDir, { recursive: true });
@@ -106,12 +108,17 @@ export async function exportProject(projectId, options, res) {
         const dest = path.join(imagesDir, `logo${ext}`);
         await download(url, dest);
         data.project.logo.src = `./images/logo${ext}`;
+
 o${ext}`;
       } catch {
         // keep remote URL on failure
       }
     }
   }
+
+  // keep panorama URLs pointing to their original (e.g., Cloudinary) sources
+  // to avoid issues with offline copies not rendering correctly
+  // (no mirroring of 360° images)
 
   // data/project.json unless we inline
   if (!inlineData) {
@@ -176,7 +183,9 @@ o${ext}`;
     .replace('{{LIB_SCRIPTS}}', libScripts)
     .replace('{{INLINE_DATA}}', inlineDataStr)
     .replace('{{HEADER_LOGO}}', logoHtml);
-utf8');
+
+  await fs.promises.writeFile(path.join(tmpDir, 'map.html'), html, 'utf8');
+  await fs.promises.writeFile(path.join(assetsDir, 'js', 'app.js'), appJs, 'utf8');
   await fs.promises.writeFile(path.join(assetsDir, 'css', 'styles.css'), stylesCss, 'utf8');
 
   // stream ZIP
