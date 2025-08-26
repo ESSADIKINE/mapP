@@ -7,6 +7,7 @@ import archiver from 'archiver';
 import { Project } from '../models/Project.js';
 import { decodePolyline } from '../utils/polyline.js';
 import { slugify } from '../utils/slug.js';
+import { download } from '../utils/download.js';
 
 /**
  * Normalize the DB doc into the export JSON consumed by the static bundle.
@@ -78,11 +79,11 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
 /**
  * Export a project as a static bundle and stream it as a ZIP file.
  * @param {string} projectId
- * @param {{ inlineData?: boolean, includeLocalLibs?: boolean, styleURL?: string, profiles?: string[] }} options
+ * @param {{ inlineData?: boolean, includeLocalLibs?: boolean, mirrorImagesLocally?: boolean, styleURL?: string, profiles?: string[] }} options
  * @param {import('express').Response} res
  */
 export async function exportProject(projectId, options, res) {
-  const { inlineData = false, includeLocalLibs = true } = options || {};
+  const { inlineData = false, includeLocalLibs = true, mirrorImagesLocally = true } = options || {};
 
   const doc = await Project.findById(projectId).lean();
   const data = buildExportData(doc, options);
@@ -90,8 +91,47 @@ export async function exportProject(projectId, options, res) {
   // temp dir
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'export-'));
   const assetsDir = path.join(tmpDir, 'assets');
+  const imagesDir = path.join(tmpDir, 'images');
   await fs.promises.mkdir(path.join(assetsDir, 'js'), { recursive: true });
   await fs.promises.mkdir(path.join(assetsDir, 'css'), { recursive: true });
+  await fs.promises.mkdir(imagesDir, { recursive: true });
+
+  // logo asset handling
+  if (data.project.logo?.src) {
+    if (mirrorImagesLocally) {
+      try {
+        const url = data.project.logo.src;
+        const ext = path.extname(new URL(url).pathname) || '.png';
+        const dest = path.join(imagesDir, `logo${ext}`);
+        await download(url, dest);
+        data.project.logo.src = `./images/logo${ext}`;
+      } catch {
+        // keep remote URL on failure
+      }
+    }
+  }
+
+  // mirror panorama images when requested so 360° views work offline
+  const mirrorPanorama = async (url, name) => {
+    if (!mirrorImagesLocally) return url;
+    try {
+      const ext = path.extname(new URL(url).pathname) || '.jpg';
+      const dest = path.join(imagesDir, `${name}${ext}`);
+      await download(url, dest);
+      return `./images/${name}${ext}`;
+    } catch {
+      return url; // fall back to remote URL on error
+    }
+  };
+
+  if (data.principal.virtualtour) {
+    data.principal.virtualtour = await mirrorPanorama(data.principal.virtualtour, 'pano-principal');
+  }
+  for (const s of data.secondaries) {
+    if (s.virtualtour) {
+      s.virtualtour = await mirrorPanorama(s.virtualtour, `pano-${s.id}`);
+    }
+  }
 
   // data/project.json unless we inline
   if (!inlineData) {
@@ -146,11 +186,16 @@ export async function exportProject(projectId, options, res) {
     ? `<script>window.__PROJECT__ = ${JSON.stringify(data)};</script>`
     : '';
 
+  const logoHtml = data.project.logo?.src
+    ? `<img src="${data.project.logo.src}" alt="${data.project.title}" class="logo-img" /> <span class="logo-text">${data.project.title}</span>`
+    : `<span class="logo-text">${data.project.title}</span>`;
+
   const html = mapTpl
     .replace('{{TITLE}}', data.project.title)
     .replace('{{LIB_STYLES}}', libStyles)
     .replace('{{LIB_SCRIPTS}}', libScripts)
-    .replace('{{INLINE_DATA}}', inlineDataStr);
+    .replace('{{INLINE_DATA}}', inlineDataStr)
+    .replace('{{HEADER_LOGO}}', logoHtml);
 
   await fs.promises.writeFile(path.join(tmpDir, 'map.html'), html, 'utf8');
   await fs.promises.writeFile(path.join(assetsDir, 'js', 'app.js'), appJs, 'utf8');

@@ -28,10 +28,20 @@ body {
 }
 
 .logo {
+  display: flex;
+  align-items: center;
+  margin-right: 50px;
+}
+
+.logo-img {
+  height: 40px;
+  margin-right: 10px;
+}
+
+.logo-text {
   color: white;
   font-size: 24px;
   font-weight: bold;
-  margin-right: 50px;
 }
 
 .nav-menu {
