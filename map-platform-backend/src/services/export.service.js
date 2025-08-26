@@ -8,7 +8,6 @@ import { Project } from '../models/Project.js';
 import { decodePolyline } from '../utils/polyline.js';
 import { slugify } from '../utils/slug.js';
 import { download } from '../utils/download.js';
-
 /**
  * Normalize the DB doc into the export JSON consumed by the static bundle.
  */
