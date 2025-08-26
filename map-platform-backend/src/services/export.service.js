@@ -7,7 +7,9 @@ import archiver from 'archiver';
 import { Project } from '../models/Project.js';
 import { decodePolyline } from '../utils/polyline.js';
 import { slugify } from '../utils/slug.js';
-import { download } from '../utils/download.js';
+
+/**
+ * Nimport { download } from '../utils/download.js';
 
 /**
  * Normalize the DB doc into the export JSON consumed by the static bundle.
@@ -90,8 +92,7 @@ export async function exportProject(projectId, options, res) {
 
   // temp dir
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'export-'));
-  const assetsDir = path.join(tmpDir, 'assets');
-  const imagesDir = path.join(tmpDir, 'images');
+  const assetsDir = path.join(tmpDir, '  const imagesDir = path.join(tmpDir, 'images');
   await fs.promises.mkdir(path.join(assetsDir, 'js'), { recursive: true });
   await fs.promises.mkdir(path.join(assetsDir, 'css'), { recursive: true });
   await fs.promises.mkdir(imagesDir, { recursive: true });
@@ -105,31 +106,10 @@ export async function exportProject(projectId, options, res) {
         const dest = path.join(imagesDir, `logo${ext}`);
         await download(url, dest);
         data.project.logo.src = `./images/logo${ext}`;
+o${ext}`;
       } catch {
         // keep remote URL on failure
       }
-    }
-  }
-
-  // mirror panorama images when requested so 360° views work offline
-  const mirrorPanorama = async (url, name) => {
-    if (!mirrorImagesLocally) return url;
-    try {
-      const ext = path.extname(new URL(url).pathname) || '.jpg';
-      const dest = path.join(imagesDir, `${name}${ext}`);
-      await download(url, dest);
-      return `./images/${name}${ext}`;
-    } catch {
-      return url; // fall back to remote URL on error
-    }
-  };
-
-  if (data.principal.virtualtour) {
-    data.principal.virtualtour = await mirrorPanorama(data.principal.virtualtour, 'pano-principal');
-  }
-  for (const s of data.secondaries) {
-    if (s.virtualtour) {
-      s.virtualtour = await mirrorPanorama(s.virtualtour, `pano-${s.id}`);
     }
   }
 
@@ -196,9 +176,7 @@ export async function exportProject(projectId, options, res) {
     .replace('{{LIB_SCRIPTS}}', libScripts)
     .replace('{{INLINE_DATA}}', inlineDataStr)
     .replace('{{HEADER_LOGO}}', logoHtml);
-
-  await fs.promises.writeFile(path.join(tmpDir, 'map.html'), html, 'utf8');
-  await fs.promises.writeFile(path.join(assetsDir, 'js', 'app.js'), appJs, 'utf8');
+utf8');
   await fs.promises.writeFile(path.join(assetsDir, 'css', 'styles.css'), stylesCss, 'utf8');
 
   // stream ZIP
