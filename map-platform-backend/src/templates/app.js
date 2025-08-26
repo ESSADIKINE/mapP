@@ -82,6 +82,7 @@
       viewer = pannellum.viewer('panoSmall', {
         type: 'equirectangular',
         panorama: project.virtualtour,
+        crossOrigin: 'anonymous',
         autoLoad: true,
         showControls: true,
         hfov: 100
