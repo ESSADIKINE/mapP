@@ -10,7 +10,7 @@
 <body>
   <!-- Header -->
   <header id="header" class="header">
-    <div class="logo">◆ROF PRAMASA</div>
+    <div id="logo" class="logo">{{HEADER_LOGO}}</div>
     <nav>
       <ul id="mainMenu" class="nav-menu">
         <li><a href="#" class="active" onclick="showHome()">Home</a></li>
@@ -38,6 +38,10 @@
       </div>
       <div class="info-body">
         <div id="panoSmall" class="pano-small"></div>
+        <div id="infoMeta" class="info-meta">
+          <span id="infoDistance"></span>
+          <span id="infoTime"></span>
+        </div>
         <div class="info-actions">
           <button id="showRouteBtn" class="route-button" onclick="showRoute()">Show Route</button>
         </div>

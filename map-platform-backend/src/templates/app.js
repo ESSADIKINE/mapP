@@ -68,6 +68,9 @@
     const panel = document.getElementById('infoPanel');
     const title = document.getElementById('infoTitle');
     const container = document.getElementById('panoSmall');
+    const distanceEl = document.getElementById('infoDistance');
+    const timeEl = document.getElementById('infoTime');
+    const meta = document.getElementById('infoMeta');
 
     title.textContent = project.name;
     panel.classList.remove('hidden');
@@ -78,14 +81,24 @@
     }
     container.innerHTML = '';
 
+    distanceEl.textContent = project.footerInfo?.distanceText || '';
+    timeEl.textContent = project.footerInfo?.timeText || '';
+    if (distanceEl.textContent || timeEl.textContent) {
+      meta.style.display = 'flex';
+    } else {
+      meta.style.display = 'none';
+    }
+
     if (project.virtualtour) {
       viewer = pannellum.viewer('panoSmall', {
         type: 'equirectangular',
         panorama: project.virtualtour,
+        crossOrigin: 'anonymous',
         autoLoad: true,
         showControls: true,
         hfov: 100
       });
+      viewer.on('load', () => viewer.resize());
     }
   }
 
