@@ -8,10 +8,6 @@ import { Project } from '../models/Project.js';
 import { decodePolyline } from '../utils/polyline.js';
 import { slugify } from '../utils/slug.js';
 import { download } from '../utils/download.js';
-
-/**
- * Nimport { download } from '../utils/download.js';
-
 /**
  * Normalize the DB doc into the export JSON consumed by the static bundle.
  */
@@ -108,17 +104,44 @@ export async function exportProject(projectId, options, res) {
         const dest = path.join(imagesDir, `logo${ext}`);
         await download(url, dest);
         data.project.logo.src = `./images/logo${ext}`;
-
-o${ext}`;
       } catch {
         // keep remote URL on failure
       }
     }
   }
 
-  // keep panorama URLs pointing to their original (e.g., Cloudinary) sources
-  // to avoid issues with offline copies not rendering correctly
-  // (no mirroring of 360° images)
+  // panorama asset handling
+  if (mirrorImagesLocally) {
+    const panoTasks = [];
+
+    if (data.principal.virtualtour) {
+      panoTasks.push(async () => {
+        try {
+          const url = data.principal.virtualtour;
+          const ext = path.extname(new URL(url).pathname) || '.jpg';
+          const dest = path.join(imagesDir, `pano-principal${ext}`);
+          await download(url, dest);
+          data.principal.virtualtour = `./images/pano-principal${ext}`;
+        } catch {}
+      });
+    }
+
+    data.secondaries.forEach((s) => {
+      if (s.virtualtour) {
+        panoTasks.push(async () => {
+          try {
+            const url = s.virtualtour;
+            const ext = path.extname(new URL(url).pathname) || '.jpg';
+            const dest = path.join(imagesDir, `pano-${s.id}${ext}`);
+            await download(url, dest);
+            s.virtualtour = `./images/pano-${s.id}${ext}`;
+          } catch {}
+        });
+      }
+    });
+
+    await Promise.all(panoTasks.map((fn) => fn()));
+  }
 
   // data/project.json unless we inline
   if (!inlineData) {
