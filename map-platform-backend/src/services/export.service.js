@@ -110,38 +110,11 @@ export async function exportProject(projectId, options, res) {
     }
   }
 
-  // panorama asset handling
-  if (mirrorImagesLocally) {
-    const panoTasks = [];
-
-    if (data.principal.virtualtour) {
-      panoTasks.push(async () => {
-        try {
-          const url = data.principal.virtualtour;
-          const ext = path.extname(new URL(url).pathname) || '.jpg';
-          const dest = path.join(imagesDir, `pano-principal${ext}`);
-          await download(url, dest);
-          data.principal.virtualtour = `./images/pano-principal${ext}`;
-        } catch {}
-      });
-    }
-
-    data.secondaries.forEach((s) => {
-      if (s.virtualtour) {
-        panoTasks.push(async () => {
-          try {
-            const url = s.virtualtour;
-            const ext = path.extname(new URL(url).pathname) || '.jpg';
-            const dest = path.join(imagesDir, `pano-${s.id}${ext}`);
-            await download(url, dest);
-            s.virtualtour = `./images/pano-${s.id}${ext}`;
-          } catch {}
-        });
-      }
-    });
-
-    await Promise.all(panoTasks.map((fn) => fn()));
-  }
+  // panorama asset handling - keep Cloudinary URLs for 360° images
+  // Only download and localize logo, keep 360° images on Cloudinary
+  // This prevents CORS issues when opening the exported file locally
+  // The 360° images will be loaded directly from Cloudinary URLs
+  // which are accessible from any origin and don't require local file access
 
   // data/project.json unless we inline
   if (!inlineData) {
@@ -184,7 +157,13 @@ export async function exportProject(projectId, options, res) {
     ? `<link rel="stylesheet" href="./libs/maplibre-gl.css" />
   <link rel="stylesheet" href="./libs/pannellum.css" />`
     : `<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css" />`;
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css" />
+  <style>
+    .pannellum-container { width: 100% !important; height: 100% !important; }
+    .pannellum-container canvas { border-radius: 10px !important; }
+    .pannellum-container .pnlm-controls-container { border-radius: 10px; }
+    .pannellum-container .pnlm-controls { z-index: 1000; }
+  </style>`;
 
   const libScripts = libsAvailable
     ? `<script src="./libs/maplibre-gl.js"></script>

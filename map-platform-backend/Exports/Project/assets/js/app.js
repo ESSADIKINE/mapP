@@ -1,158 +1,187 @@
-(async function () {
-  // --- Load project data: prefer inline JSON, fallback to window.__PROJECT__, then ./data/project.json ---
-  let data = null;
-
-  const tag = document.getElementById('project-data');
-  const embedded = tag && tag.textContent && tag.textContent.trim().startsWith('{')
-    ? tag.textContent.trim()
-    : '';
-
-  if (embedded) {
-    try { data = JSON.parse(embedded); } catch (e) { console.error('Invalid inline JSON', e); }
-  }
-  if (!data && typeof window !== 'undefined' && window.__PROJECT__) {
-    data = window.__PROJECT__;
-  }
-  if (!data) {
-    // Only works when served over http(s) (won’t work with file://)
-    try {
-      const r = await fetch('./data/project.json');
-      if (r.ok) data = await r.json();
-    } catch (e) {
-      console.warn('Fetch fallback failed (expected on file://):', e);
-    }
-  }
-  if (!data) {
-    alert('No project data found. Paste your JSON into <script id="project-data"> in map.html.');
-    return;
-  }
-
-  // --- Header info ---
-  document.getElementById('title').textContent = data.project?.title || 'Project';
-  document.getElementById('subtitle').textContent = data.project?.description || '';
-  const logo = document.getElementById('logo');
-  if (data.project?.logo?.src) {
-    logo.src = data.project.logo.src;
-    logo.alt = data.project.logo.alt || 'Logo';
-  } else {
-    logo.style.display = 'none';
-  }
-
-  // --- Map init ---
-  const map = new maplibregl.Map({
-    container: 'map',
-    style: data.project?.styleURL || 'https://demotiles.maplibre.org/style.json',
-    center: [data.principal.lon, data.principal.lat],
-    zoom: data.principal.zoom || 13
-  });
-  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
-
-  // Helper: build popup HTML
-  function popupHTML(place, isPrincipal) {
-    const lines = [];
-    lines.push(`<h3 class="popup-title">${place.name || (isPrincipal ? 'Principal' : 'Place')}</h3>`);
-    const meta = [];
-    if (place.category) meta.push(place.category);
-    if (place.footerInfo?.location) meta.push(place.footerInfo.location);
-    if (!isPrincipal) {
-      if (place.footerInfo?.distanceText) meta.push(place.footerInfo.distanceText);
-      if (place.footerInfo?.timeText) meta.push(place.footerInfo.timeText);
-    }
-    if (meta.length) lines.push(`<p class="popup-meta">${meta.join(' • ')}</p>`);
-    const hasVT = !!place.virtualtour;
-    lines.push(`<div>`);
-    if (hasVT) {
-      lines.push(`<button class="btn primary" data-action="open-pano" data-url="${encodeURIComponent(place.virtualtour)}">View 360°</button>`);
-    }
-    lines.push(`<button class="btn" data-action="center" data-lon="${place.lon}" data-lat="${place.lat}">Center</button>`);
-    lines.push(`</div>`);
-    return lines.join('');
-  }
-
-  // 360° viewer modal
+(async function(){
+  const data = window.__PROJECT__ || await fetch('./data/project.json').then(r=>r.json());
+  
+  let map;
+  let currentProject = null;
+  let routeLayerId = null;
   let viewer = null;
-  const panoModal = document.getElementById('panoModal');
-  const panoClose = document.getElementById('panoClose');
-  function openPano(url) {
-    panoModal.classList.remove('hidden');
-    panoModal.setAttribute('aria-hidden', 'false');
-    // init / reinit pannellum
-    const container = document.getElementById('panorama');
-    container.innerHTML = ''; // reset
-    viewer = window.pannellum?.viewer('panorama', {
-      type: 'equirectangular',
-      panorama: url,
-      autoLoad: true,
-      hfov: 100,
-      compass: true
+
+  function initMap() {
+    map = new maplibregl.Map({
+      container: 'map',
+      style: {
+        version: 8,
+        sources: {
+          'satellite': {
+            type: 'raster',
+            tiles: [
+              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            ],
+            tileSize: 256,
+            attribution: '© Esri'
+          }
+        },
+        layers: [
+          { id: 'satellite-layer', type: 'raster', source: 'satellite', minzoom: 0, maxzoom: 20 }
+        ]
+      },
+      center: [data.principal.lon, data.principal.lat],
+      zoom: data.principal.zoom || 13
     });
-  }
-  function closePano() {
-    panoModal.classList.add('hidden');
-    panoModal.setAttribute('aria-hidden', 'true');
-    try { viewer?.destroy?.(); } catch {}
-    viewer = null;
-  }
-  panoClose.addEventListener('click', closePano);
-  panoModal.addEventListener('click', (e) => { if (e.target === panoModal) closePano(); });
 
-  // Intercept popup button clicks
-  document.body.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-action]');
-    if (!btn) return;
-    const action = btn.getAttribute('data-action');
-    if (action === 'open-pano') {
-      openPano(decodeURIComponent(btn.getAttribute('data-url')));
-    } else if (action === 'center') {
-      const lon = Number(btn.getAttribute('data-lon'));
-      const lat = Number(btn.getAttribute('data-lat'));
-      map.easeTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 15) });
-    }
-  });
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
 
-  // Add everything after style loads
-  map.on('load', () => {
-    // Markers
-    const principalMarker = new maplibregl.Marker({ color: '#e11d48' })
+    map.on('error', (error) => {
+      if (error?.error?.message?.includes('tile')) {
+        if (!map._removed && !map.getSource('fallback-satellite')) {
+          map.addSource('fallback-satellite', {
+            type: 'raster',
+            tiles: ['https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}.jpg'],
+            tileSize: 256,
+            attribution: '© Stadia Maps'
+          });
+          map.addLayer({ id: 'fallback-sat-layer', type: 'raster', source: 'fallback-satellite', minzoom: 0, maxzoom: 20 });
+        }
+      }
+    });
+
+    new maplibregl.Marker({ color: '#111827' })
       .setLngLat([data.principal.lon, data.principal.lat])
-      .setPopup(new maplibregl.Popup({ offset: 16 }).setHTML(popupHTML(data.principal, true)))
+      .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
       .addTo(map);
 
-    const allCoords = [[data.principal.lon, data.principal.lat]];
+    // Secondary markers with hover/click interactions
+    data.secondaries.forEach((s) => {
+      const marker = new maplibregl.Marker({ color: '#2563eb' }).setLngLat([s.lon, s.lat]).addTo(map);
 
-    (data.secondaries || []).forEach((s) => {
-      const m = new maplibregl.Marker({ color: '#2563eb' })
-        .setLngLat([s.lon, s.lat])
-        .setPopup(new maplibregl.Popup({ offset: 16 }).setHTML(popupHTML(s, false)))
-        .addTo(map);
+      const openPanel = () => {
+        currentProject = s;
+        showInfoPanel(s);
+      };
 
-      allCoords.push([s.lon, s.lat]);
-
-      // Routes
-      (s.routes || []).forEach((r, i) => {
-        if (!r || !r.geometry || r.geometry.type !== 'LineString') return;
-        const srcId = `route-${s.id}-${i}`;
-        map.addSource(srcId, {
-          type: 'geojson',
-          data: { type: 'Feature', geometry: r.geometry }
-        });
-        map.addLayer({
-          id: srcId,
-          type: 'line',
-          source: srcId,
-          paint: { 'line-color': '#2563eb', 'line-width': 3 }
-        });
-        // include route coordinates in bounds
-        if (Array.isArray(r.geometry.coordinates)) {
-          r.geometry.coordinates.forEach((c) => Array.isArray(c) && c.length >= 2 && allCoords.push(c));
-        }
-      });
+      marker.getElement().addEventListener('mouseenter', openPanel);
+      marker.getElement().addEventListener('click', openPanel);
     });
+  }
 
-    // Fit to project
-    if (allCoords.length >= 2) {
-      const b = allCoords.reduce((bb, c) => bb.extend(c), new maplibregl.LngLatBounds(allCoords[0], allCoords[0]));
-      map.fitBounds(b, { padding: 80, duration: 900 });
+  function showInfoPanel(project) {
+    const panel = document.getElementById('infoPanel');
+    const title = document.getElementById('infoTitle');
+    const container = document.getElementById('panoSmall');
+    const distanceEl = document.getElementById('infoDistance');
+    const timeEl = document.getElementById('infoTime');
+    const meta = document.getElementById('infoMeta');
+
+    title.textContent = project.name;
+    panel.classList.remove('hidden');
+
+    if (viewer && viewer.destroy) {
+      viewer.destroy();
+      viewer = null;
     }
-  });
+    container.innerHTML = '';
+
+    distanceEl.textContent = project.footerInfo?.distanceText || '';
+    timeEl.textContent = project.footerInfo?.timeText || '';
+    if (distanceEl.textContent || timeEl.textContent) {
+      meta.style.display = 'flex';
+    } else {
+      meta.style.display = 'none';
+    }
+
+    if (project.virtualtour) {
+      viewer = pannellum.viewer('panoSmall', {
+        type: 'equirectangular',
+        panorama: project.virtualtour,
+        crossOrigin: 'anonymous',
+        autoLoad: true,
+        showControls: true,
+        hfov: 100
+      });
+      viewer.on('load', () => viewer.resize());
+    }
+  }
+
+  function hideInfoPanel() {
+    const panel = document.getElementById('infoPanel');
+    panel.classList.add('hidden');
+    if (viewer && viewer.destroy) {
+      viewer.destroy();
+      viewer = null;
+    }
+  }
+
+  function showRoute() {
+    if (!currentProject) return;
+
+    // Remove existing route
+    if (routeLayerId) {
+      if (map.getLayer(routeLayerId)) map.removeLayer(routeLayerId);
+      if (map.getSource(routeLayerId)) map.removeSource(routeLayerId);
+      routeLayerId = null;
+    }
+
+    const route = (currentProject.routes && currentProject.routes[0]) || null;
+    let feature;
+
+    if (route && route.geometry && route.geometry.type === 'LineString') {
+      feature = { type: 'Feature', properties: {}, geometry: route.geometry };
+    } else {
+      // fallback straight line
+      feature = {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [data.principal.lon, data.principal.lat],
+            [currentProject.lon, currentProject.lat]
+          ]
+        }
+      };
+    }
+
+    const id = `route-${currentProject.id || currentProject.name}`;
+    map.addSource(id, { type: 'geojson', data: feature });
+    map.addLayer({
+      id,
+      type: 'line',
+      source: id,
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': '#10b981', 'line-width': 6, 'line-opacity': 0.9 }
+    });
+    routeLayerId = id;
+
+    // Fit to exact route geometry (no unintended fly elsewhere)
+    const bounds = new maplibregl.LngLatBounds();
+    feature.geometry.coordinates.forEach(c => bounds.extend(c));
+    map.fitBounds(bounds, { padding: 60, maxZoom: 17 });
+  }
+
+  function showHome() {
+    hideInfoPanel();
+    if (routeLayerId) {
+      if (map.getLayer(routeLayerId)) map.removeLayer(routeLayerId);
+      if (map.getSource(routeLayerId)) map.removeSource(routeLayerId);
+      routeLayerId = null;
+    }
+    map.flyTo({ center: [data.principal.lon, data.principal.lat], zoom: data.principal.zoom || 13, duration: 1000 });
+  }
+
+  function showAbout() { alert('About Us'); }
+  function showProjects() { alert('Projects'); }
+  function goHome() { showHome(); }
+  function toggleMenu() { alert('Menu'); }
+
+  window.onload = function() {
+    initMap();
+  };
+
+  window.showHome = showHome;
+  window.showAbout = showAbout;
+  window.showProjects = showProjects;
+  window.goHome = goHome;
+  window.toggleMenu = toggleMenu;
+  window.showRoute = showRoute;
+  window.hideInfoPanel = hideInfoPanel;
 })();
