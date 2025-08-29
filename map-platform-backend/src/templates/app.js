@@ -49,7 +49,6 @@
 
     map.on('load', () => {
       if (loadingEl) loadingEl.style.display = 'none';
-
       if (isFinite(data.principal.lon) && isFinite(data.principal.lat)) {
         new maplibregl.Marker({ color: '#111827' })
           .setLngLat([data.principal.lon, data.principal.lat])
