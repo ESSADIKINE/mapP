@@ -1,4 +1,5 @@
 (async function(){
+  const loadingEl = document.getElementById('loading');
   const data = window.__PROJECT__ || await fetch('./data/project.json').then(r=>r.json());
   
   let map;
@@ -30,6 +31,10 @@
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
+
+    map.on('load', () => {
+      if (loadingEl) loadingEl.style.display = 'none';
+    });
 
     map.on('error', (error) => {
       if (error?.error?.message?.includes('tile')) {
