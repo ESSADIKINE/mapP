@@ -154,6 +154,7 @@
                     // Ensure container is completely clean
                     container.innerHTML = '';
                     container.className = 'pano-small';
+                    
                     container.id = 'panoSmall';
             try {
               console.log('Creating Pannellum viewer for container:', container.id);
