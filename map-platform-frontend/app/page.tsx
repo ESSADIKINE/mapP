@@ -462,7 +462,16 @@ function decodePolylineToGeoJSON(maplibregl, encoded) {
       do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
       const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
       lng += dlng;
-      coordinates.push([lng * 1e-5, lat * 1e-5]);
+      const lon = lng * 1e-5;
+      const latVal = lat * 1e-5;
+      // guard invalid numbers
+      if (!isFinite(lon) || !isFinite(latVal)) continue;
+      // ensure [lon, lat] order, flip if clearly swapped
+      let pair = [lon, latVal];
+      if (Math.abs(lon) <= 90 && Math.abs(latVal) > 90) {
+        pair = [latVal, lon];
+      }
+      coordinates.push(pair);
     }
     return coordinates;
   }
@@ -473,6 +482,22 @@ function decodePolylineToGeoJSON(maplibregl, encoded) {
     geometry: { type: 'LineString', coordinates: coords },
     properties: {}
   };
+}
+
+function sanitizeLineCoords(coords) {
+  const cleaned = [];
+  coords.forEach((pt) => {
+    if (!Array.isArray(pt) || pt.length < 2) return;
+    let [lon, lat] = pt;
+    if (!isFinite(lon) || !isFinite(lat)) return;
+    // if values look flipped ([lat, lon]), swap
+    if (Math.abs(lon) <= 90 && Math.abs(lat) > 90) {
+      [lon, lat] = [lat, lon];
+    }
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
+    cleaned.push([lon, lat]);
+  });
+  return cleaned;
 }
 
 // Helper function to generate intermediate waypoints for realistic car routing
@@ -812,121 +837,140 @@ function MapCanvas() {
 
   // draw markers & routes on updates
   useEffect(() => {
-    if (!ready || !mapInstance || !maplibregl) return;
+    if (!mapInstance || !maplibregl) return;
 
-    // Clean previous markers
-    if (!mapInstance.__markers) mapInstance.__markers = [];
-    mapInstance.__markers.forEach((mk) => mk.remove());
-    mapInstance.__markers = [];
+    const draw = () => {
+      // Clean previous markers
+      if (!mapInstance.__markers) mapInstance.__markers = [];
+      mapInstance.__markers.forEach((mk) => mk.remove());
+      mapInstance.__markers = [];
 
-    // Principal marker
-    const p = project.principal;
-    const pm = new maplibregl.Marker({ color: '#111827' })
-      .setLngLat([p.longitude, p.latitude])
-      .setPopup(new maplibregl.Popup().setHTML(`<div class="text-sm"><b>${p.name}</b><br/>${prettyLatLng(p.latitude, p.longitude)}</div>`))
-      .addTo(mapInstance);
-    mapInstance.__markers.push(pm);
-
-    // Secondary markers
-    project.secondaries.forEach((s, idx) => {
-      const mk = new maplibregl.Marker({ color: '#2563eb' })
-        .setLngLat([s.longitude, s.latitude])
-        .setPopup(new maplibregl.Popup().setHTML(`
-          <div class="text-sm">
-            <b>${s.name}</b><br/>${prettyLatLng(s.latitude, s.longitude)}<br/>
-            ${s.footerInfo?.distance ? `Distance: ${s.footerInfo.distance}<br/>` : ''}
-            ${s.footerInfo?.time ? `Time: ${s.footerInfo.time}` : ''}
-          </div>`))
-        .addTo(mapInstance);
-      mapInstance.__markers.push(mk);
-    });
-
-    // Routes: remove existing layers/sources (ensure layers removed before sources)
-    const routeIds = (mapInstance.__routeIds || []);
-    routeIds.forEach((id) => {
-      const outlineId = `${id}-outline`;
-      if (mapInstance.getLayer(outlineId)) mapInstance.removeLayer(outlineId);
-      if (mapInstance.getLayer(id)) mapInstance.removeLayer(id);
-      if (mapInstance.getSource(id)) mapInstance.removeSource(id);
-    });
-    mapInstance.__routeIds = [];
-
-    // Draw routes if present
-    project.secondaries.forEach((s, idx) => {
-      const encoded = s.routesFromBase?.[0];
-      if (!encoded) return;
-      
-      console.log(`Rendering route for ${s.name}:`, {
-        hasRouteGeoJSON: !!s.routeGeoJSON,
-        routeGeoJSON: s.routeGeoJSON,
-        encoded: encoded
-      });
-      
-      try {
-        let feature;
-        let routeId = `route-${idx}`;
-        
-        // Check if we have GeoJSON data (from routing API)
-        if (s.routeGeoJSON) {
-          // Use the actual GeoJSON route data
-          feature = s.routeGeoJSON;
-          console.log(`Using GeoJSON route data for ${s.name}:`, feature);
-        } else {
-          // Fallback to polyline decoding
-          feature = decodePolylineToGeoJSON(maplibregl, encoded);
-          console.log(`Using decoded polyline route for ${s.name}:`, feature);
-        }
-        
-        // Remove existing route layer if it exists
-        if (mapInstance.getLayer(routeId)) {
-          mapInstance.removeLayer(routeId);
-        }
-        if (mapInstance.getSource(routeId)) {
-          mapInstance.removeSource(routeId);
-        }
-        
-        // Add new route layer with enhanced styling
-        mapInstance.addSource(routeId, { type: 'geojson', data: feature });
-        mapInstance.addLayer({
-          id: routeId,
-          type: 'line',
-          source: routeId,
-          paint: { 
-            'line-width': 6, 
-            'line-color': '#10b981',
-            'line-opacity': 0.9
-          },
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          }
-        });
-        
-        // Add a subtle outline for better visibility
-        mapInstance.addLayer({
-          id: `${routeId}-outline`,
-          type: 'line',
-          source: routeId,
-          paint: { 
-            'line-width': 8, 
-            'line-color': '#ffffff',
-            'line-opacity': 0.3
-          },
-          layout: {
-            'line-join': 'round',
-            'line-cap': 'round'
-          }
-        }, routeId); // Insert below the main route line
-        
-        // Track base route IDs so we can clean layers/sources safely later
-        mapInstance.__routeIds.push(routeId);
-        
-        console.log(`Route ${idx} added to map:`, feature);
-      } catch (error) {
-        console.error(`Failed to render route ${idx}:`, error);
+      // Principal marker
+      const p = project.principal;
+      if (isFinite(p.longitude) && isFinite(p.latitude)) {
+        const pm = new maplibregl.Marker({ color: '#111827' })
+          .setLngLat([p.longitude, p.latitude])
+          .setPopup(new maplibregl.Popup().setHTML(`<div class="text-sm"><b>${p.name}</b><br/>${prettyLatLng(p.latitude, p.longitude)}</div>`))
+          .addTo(mapInstance);
+        mapInstance.__markers.push(pm);
       }
-    });
-  }, [project, mapInstance, maplibregl, ready]);
+
+      // Secondary markers
+      project.secondaries.forEach((s, idx) => {
+        if (!isFinite(s.longitude) || !isFinite(s.latitude)) return;
+        const mk = new maplibregl.Marker({ color: '#2563eb' })
+          .setLngLat([s.longitude, s.latitude])
+          .setPopup(new maplibregl.Popup().setHTML(`
+            <div class="text-sm">
+              <b>${s.name}</b><br/>${prettyLatLng(s.latitude, s.longitude)}<br/>
+              ${s.footerInfo?.distance ? `Distance: ${s.footerInfo.distance}<br/>` : ''}
+              ${s.footerInfo?.time ? `Time: ${s.footerInfo.time}` : ''}
+            </div>`))
+          .addTo(mapInstance);
+        mapInstance.__markers.push(mk);
+      });
+
+      // Routes: remove existing layers/sources (ensure layers removed before sources)
+      const routeIds = (mapInstance.__routeIds || []);
+      routeIds.forEach((id) => {
+        const outlineId = `${id}-outline`;
+        if (mapInstance.getLayer(outlineId)) mapInstance.removeLayer(outlineId);
+        if (mapInstance.getLayer(id)) mapInstance.removeLayer(id);
+        if (mapInstance.getSource(id)) mapInstance.removeSource(id);
+      });
+      mapInstance.__routeIds = [];
+
+      // Draw routes if present
+      project.secondaries.forEach((s, idx) => {
+        const encoded = s.routesFromBase?.[0];
+        if (!encoded) return;
+
+        console.log(`Rendering route for ${s.name}:`, {
+          hasRouteGeoJSON: !!s.routeGeoJSON,
+          routeGeoJSON: s.routeGeoJSON,
+          encoded: encoded
+        });
+
+        try {
+          let feature;
+          let routeId = `route-${idx}`;
+
+          // Check if we have GeoJSON data (from routing API)
+          if (s.routeGeoJSON) {
+            feature = s.routeGeoJSON;
+            console.log(`Using GeoJSON route data for ${s.name}:`, feature);
+          } else {
+            feature = decodePolylineToGeoJSON(maplibregl, encoded);
+            console.log(`Using decoded polyline route for ${s.name}:`, feature);
+          }
+
+          if (feature?.geometry?.type === 'LineString') {
+            feature = {
+              ...feature,
+              geometry: {
+                ...feature.geometry,
+                coordinates: sanitizeLineCoords(feature.geometry.coordinates)
+              }
+            };
+          }
+
+          if (!feature.geometry.coordinates.length) return;
+
+          // Remove existing route layer if it exists
+          if (mapInstance.getLayer(routeId)) {
+            mapInstance.removeLayer(routeId);
+          }
+          if (mapInstance.getSource(routeId)) {
+            mapInstance.removeSource(routeId);
+          }
+
+          // Add new route layer with enhanced styling
+          mapInstance.addSource(routeId, { type: 'geojson', data: feature });
+          mapInstance.addLayer({
+            id: routeId,
+            type: 'line',
+            source: routeId,
+            paint: {
+              'line-width': 6,
+              'line-color': '#10b981',
+              'line-opacity': 0.9
+            },
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            }
+          });
+
+          mapInstance.addLayer({
+            id: `${routeId}-outline`,
+            type: 'line',
+            source: routeId,
+            paint: {
+              'line-width': 8,
+              'line-color': '#ffffff',
+              'line-opacity': 0.3
+            },
+            layout: {
+              'line-join': 'round',
+              'line-cap': 'round'
+            }
+          }, routeId); // Insert below the main route line
+
+          mapInstance.__routeIds.push(routeId);
+
+          console.log(`Route ${idx} added to map:`, feature);
+        } catch (error) {
+          console.error(`Failed to render route ${idx}:`, error);
+        }
+      });
+    };
+
+    if (mapInstance.isStyleLoaded()) {
+      draw();
+    } else {
+      mapInstance.once('load', draw);
+    }
+  }, [project, mapInstance, maplibregl]);
 
   return (
     <div ref={mapRef} className="w-full h-full rounded-2xl overflow-hidden bg-gray-200" style={{ position: 'relative' }}>

@@ -7,6 +7,21 @@
   let routeLayerId = null;
   let viewer = null;
 
+  function sanitizeLine(coords) {
+    const out = [];
+    coords.forEach((pt) => {
+      if (!Array.isArray(pt) || pt.length < 2) return;
+      let [lon, lat] = pt;
+      if (!isFinite(lon) || !isFinite(lat)) return;
+      if (Math.abs(lon) <= 90 && Math.abs(lat) > 90) {
+        [lon, lat] = [lat, lon];
+      }
+      if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
+      out.push([lon, lat]);
+    });
+    return out;
+  }
+
   function initMap() {
     map = new maplibregl.Map({
       container: 'map',
@@ -34,6 +49,26 @@
 
     map.on('load', () => {
       if (loadingEl) loadingEl.style.display = 'none';
+
+      if (isFinite(data.principal.lon) && isFinite(data.principal.lat)) {
+        new maplibregl.Marker({ color: '#111827' })
+          .setLngLat([data.principal.lon, data.principal.lat])
+          .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
+          .addTo(map);
+      }
+
+      // Secondary markers with click-only interactions
+      data.secondaries.forEach((s) => {
+        if (!isFinite(s.lon) || !isFinite(s.lat)) return;
+        const marker = new maplibregl.Marker({ color: '#2563eb' }).setLngLat([s.lon, s.lat]).addTo(map);
+
+        const openPanel = () => {
+          currentProject = s;
+          showInfoPanel(s);
+        };
+
+        marker.getElement().addEventListener('click', openPanel);
+      });
     });
 
     map.on('error', (error) => {
@@ -48,24 +83,6 @@
           map.addLayer({ id: 'fallback-sat-layer', type: 'raster', source: 'fallback-satellite', minzoom: 0, maxzoom: 20 });
         }
       }
-    });
-
-    new maplibregl.Marker({ color: '#111827' })
-      .setLngLat([data.principal.lon, data.principal.lat])
-      .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
-      .addTo(map);
-
-    // Secondary markers with hover/click interactions
-    data.secondaries.forEach((s) => {
-      const marker = new maplibregl.Marker({ color: '#2563eb' }).setLngLat([s.lon, s.lat]).addTo(map);
-
-      const openPanel = () => {
-        currentProject = s;
-        showInfoPanel(s);
-      };
-
-      marker.getElement().addEventListener('mouseenter', openPanel);
-      marker.getElement().addEventListener('click', openPanel);
     });
   }
 
@@ -119,48 +136,55 @@
   function showRoute() {
     if (!currentProject) return;
 
-    // Remove existing route
-    if (routeLayerId) {
-      if (map.getLayer(routeLayerId)) map.removeLayer(routeLayerId);
-      if (map.getSource(routeLayerId)) map.removeSource(routeLayerId);
-      routeLayerId = null;
-    }
+    const draw = () => {
+      if (routeLayerId) {
+        if (map.getLayer(routeLayerId)) map.removeLayer(routeLayerId);
+        if (map.getSource(routeLayerId)) map.removeSource(routeLayerId);
+        routeLayerId = null;
+      }
 
-    const route = (currentProject.routes && currentProject.routes[0]) || null;
-    let feature;
+      const route = (currentProject.routes && currentProject.routes[0]) || null;
+      let coords = [];
 
-    if (route && route.geometry && route.geometry.type === 'LineString') {
-      feature = { type: 'Feature', properties: {}, geometry: route.geometry };
+      if (route && route.geometry && route.geometry.type === 'LineString') {
+        coords = sanitizeLine(route.geometry.coordinates);
+      }
+
+      if (coords.length < 2) {
+        coords = [
+          [data.principal.lon, data.principal.lat],
+          [currentProject.lon, currentProject.lat]
+        ];
+      }
+
+      const feature = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } };
+      const id = `route-${currentProject.id || currentProject.name}`;
+
+      if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(id)) map.removeSource(id);
+
+      map.addSource(id, { type: 'geojson', data: feature });
+      map.addLayer({
+        id,
+        type: 'line',
+        source: id,
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#10b981', 'line-width': 6, 'line-opacity': 0.9 }
+      });
+      routeLayerId = id;
+
+      const bounds = new maplibregl.LngLatBounds();
+      bounds.extend([data.principal.lon, data.principal.lat]);
+      bounds.extend([currentProject.lon, currentProject.lat]);
+      coords.forEach((c) => bounds.extend(c));
+      map.fitBounds(bounds, { padding: 60, maxZoom: 17 });
+    };
+
+    if (!map.loaded()) {
+      map.once('load', draw);
     } else {
-      // fallback straight line
-      feature = {
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [data.principal.lon, data.principal.lat],
-            [currentProject.lon, currentProject.lat]
-          ]
-        }
-      };
+      draw();
     }
-
-    const id = `route-${currentProject.id || currentProject.name}`;
-    map.addSource(id, { type: 'geojson', data: feature });
-    map.addLayer({
-      id,
-      type: 'line',
-      source: id,
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
-      paint: { 'line-color': '#10b981', 'line-width': 6, 'line-opacity': 0.9 }
-    });
-    routeLayerId = id;
-
-    // Fit to exact route geometry (no unintended fly elsewhere)
-    const bounds = new maplibregl.LngLatBounds();
-    feature.geometry.coordinates.forEach(c => bounds.extend(c));
-    map.fitBounds(bounds, { padding: 60, maxZoom: 17 });
   }
 
   function showHome() {

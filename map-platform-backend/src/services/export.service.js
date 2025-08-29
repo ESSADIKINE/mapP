@@ -34,6 +34,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
     if (s.routesFromBase && s.routesFromBase.length) {
       s.routesFromBase.forEach((poly, idx) => {
         const coords = decodePolyline(poly);
+        if (coords.length < 2) return;
         routes.push({
           profile: profiles[idx] || profiles[0] || 'driving',
           distance_m: s.footerInfo?.distance ? parseInt(s.footerInfo.distance.replace(/\D/g, '')) : null,
