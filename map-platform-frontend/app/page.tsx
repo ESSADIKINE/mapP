@@ -1141,7 +1141,7 @@ export default function MappingStudio() {
   const [exporting, setExporting] = useState(false);
   const [expOpts, setExpOpts] = useState({
     mirrorImagesLocally: true,
-    inlineData: false,
+    inlineData: true,
     includeLocalLibs: true,
     styleURL: 'satellite',
     profiles: ['driving'],
