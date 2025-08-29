@@ -18,7 +18,6 @@
   const detailTime = document.getElementById('detailTime');
   const routeToggle = document.getElementById('routeToggle');
   const backBtn = document.getElementById('backBtn');
-
   function sanitizeLine(coords) {
     const out = [];
     coords.forEach((pt) => {
@@ -68,7 +67,6 @@
           .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
           .addTo(map);
       }
-
       populateSecondaries();
     });
 
@@ -179,7 +177,6 @@
       if (route && route.geometry && route.geometry.type === 'LineString') {
         coords = sanitizeLine(route.geometry.coordinates);
       }
-
       if (coords.length < 2) {
         coords = [
           [data.principal.lon, data.principal.lat],
@@ -189,7 +186,6 @@
 
       const feature = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } };
       const id = `route-${currentProject.id || currentProject.name}`;
-
       map.addSource(id, { type: 'geojson', data: feature });
       map.addLayer({
         id,
