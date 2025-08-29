@@ -40,6 +40,32 @@
     return out;
   }
 
+  const listView = document.getElementById('listView');
+  const detailsView = document.getElementById('detailsView');
+  const listEl = document.getElementById('secondaryList');
+  const detailTitle = document.getElementById('detailTitle');
+  const detailCoords = document.getElementById('detailCoords');
+  const copyBtn = document.getElementById('copyCoordsBtn');
+  const detailMedia = document.getElementById('detailMedia');
+  const detailDistance = document.getElementById('detailDistance');
+  const detailTime = document.getElementById('detailTime');
+  const routeToggle = document.getElementById('routeToggle');
+  const backBtn = document.getElementById('backBtn');
+  function sanitizeLine(coords) {
+    const out = [];
+    coords.forEach((pt) => {
+      if (!Array.isArray(pt) || pt.length < 2) return;
+      let [lon, lat] = pt;
+      if (!isFinite(lon) || !isFinite(lat)) return;
+      if (Math.abs(lon) <= 90 && Math.abs(lat) > 90) {
+        [lon, lat] = [lat, lon];
+      }
+      if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
+      out.push([lon, lat]);
+    });
+    return out;
+  }
+
   function initMap() {
     map = new maplibregl.Map({
       container: 'map',
@@ -74,7 +100,6 @@
           .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
           .addTo(map);
       }
-
       populateSecondaries();
     });
 
@@ -208,7 +233,6 @@
       if (route && route.geometry && route.geometry.type === 'LineString') {
         coords = sanitizeLine(route.geometry.coordinates);
       }
-
       if (coords.length < 2) {
         coords = [
           [data.principal.lon, data.principal.lat],

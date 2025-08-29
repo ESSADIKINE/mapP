@@ -40,6 +40,33 @@
     return out;
   }
 
+  const listView = document.getElementById('listView');
+  const detailsView = document.getElementById('detailsView');
+  const listEl = document.getElementById('secondaryList');
+  const detailTitle = document.getElementById('detailTitle');
+  const detailCoords = document.getElementById('detailCoords');
+  const copyBtn = document.getElementById('copyCoordsBtn');
+  const detailMedia = document.getElementById('detailMedia');
+  const detailDistance = document.getElementById('detailDistance');
+  const detailTime = document.getElementById('detailTime');
+  const routeToggle = document.getElementById('routeToggle');
+  const backBtn = document.getElementById('backBtn');
+
+  function sanitizeLine(coords) {
+    const out = [];
+    coords.forEach((pt) => {
+      if (!Array.isArray(pt) || pt.length < 2) return;
+      let [lon, lat] = pt;
+      if (!isFinite(lon) || !isFinite(lat)) return;
+      if (Math.abs(lon) <= 90 && Math.abs(lat) > 90) {
+        [lon, lat] = [lat, lon];
+      }
+      if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
+      out.push([lon, lat]);
+    });
+    return out;
+  }
+
   function initMap() {
     map = new maplibregl.Map({
       container: 'map',
@@ -67,7 +94,6 @@
 
     map.on('load', () => {
       if (loadingEl) loadingEl.style.display = 'none';
-
       if (isFinite(data.principal.lon) && isFinite(data.principal.lat)) {
         new maplibregl.Marker({ color: '#111827' })
           .setLngLat([data.principal.lon, data.principal.lat])
@@ -236,6 +262,7 @@
       map.fitBounds(bounds, { padding: 60, maxZoom: 17 });
     };
 
+
     if (!map.loaded()) {
       map.once('load', draw);
     } else {
@@ -254,6 +281,7 @@
   function toggleMenu() { alert('Menu'); }
 
   backBtn.addEventListener('click', () => { stickyProject = null; closeDetails(); });
+
   routeToggle.addEventListener('change', (e) => {
     if (e.target.checked) showRoute(); else hideRoute();
   });
