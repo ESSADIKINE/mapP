@@ -6,6 +6,39 @@
   let currentProject = null;
   let routeLayerId = null;
   let viewer = null;
+  let stickyProject = null;
+  let previewProject = null;
+
+  const listView = document.getElementById('listView');
+  const detailsView = document.getElementById('detailsView');
+  const listEl = document.getElementById('secondaryList');
+  const detailTitle = document.getElementById('detailTitle');
+  const detailCoords = document.getElementById('detailCoords');
+  const copyBtn = document.getElementById('copyCoordsBtn');
+  const detailMedia = document.getElementById('detailMedia');
+  const detailDistance = document.getElementById('detailDistance');
+  const detailTime = document.getElementById('detailTime');
+  const routeToggle = document.getElementById('routeToggle');
+  const backBtn = document.getElementById('backBtn');
+
+  function getSecondaryById(id) {
+    return data.secondaries.find((s) => s.id === id || s._id === id || s.name === id);
+  }
+
+  function sanitizeLine(coords) {
+    const out = [];
+    coords.forEach((pt) => {
+      if (!Array.isArray(pt) || pt.length < 2) return;
+      let [lon, lat] = pt;
+      if (!isFinite(lon) || !isFinite(lat)) return;
+      if (Math.abs(lon) <= 90 && Math.abs(lat) > 90) {
+        [lon, lat] = [lat, lon];
+      }
+      if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return;
+      out.push([lon, lat]);
+    });
+    return out;
+  }
 
   const listView = document.getElementById('listView');
   const detailsView = document.getElementById('detailsView');
@@ -101,8 +134,9 @@
         (s.footerInfo?.distanceText ? ` <span class="badge">${s.footerInfo.distanceText}</span>` : '') +
         (s.footerInfo?.timeText ? ` <span class="badge">${s.footerInfo.timeText}</span>` : '') +
         (s.virtualtour ? ` <span class="badge">3D</span>` : '');
+      s._li = li;
 
-      const open = () => openDetails(s);
+      const open = () => openDetails(s, true);
       li.addEventListener('click', open);
       li.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -114,13 +148,12 @@
       li.addEventListener('mouseleave', () => marker.getElement().classList.remove('marker-highlight'));
       listEl.appendChild(li);
 
-      marker.getElement().addEventListener('mouseenter', () => li.classList.add('hover'));
-      marker.getElement().addEventListener('mouseleave', () => li.classList.remove('hover'));
+      marker.getElement().addEventListener('mouseenter', () => showPreview(s));
+      marker.getElement().addEventListener('mouseleave', () => cancelPreview());
       marker.getElement().addEventListener('click', open);
     });
   }
-
-  function openDetails(project) {
+  function openDetails(project, sticky = false) {
     currentProject = project;
     listView.classList.add('hidden');
     detailsView.classList.remove('hidden');
@@ -147,6 +180,29 @@
       viewer.on('load', () => viewer.resize());
     }
     routeToggle.checked = false;
+    if (sticky) {
+      stickyProject = project;
+      previewProject = null;
+    }
+  }
+
+  function showPreview(project) {
+    if (stickyProject) return;
+    if (previewProject && previewProject !== project) {
+      cancelPreview();
+    }
+    previewProject = project;
+    if (project._li) project._li.classList.add('hover');
+    if (project._marker) project._marker.getElement().classList.add('marker-highlight');
+    openDetails(project, false);
+  }
+
+  function cancelPreview() {
+    if (stickyProject) return;
+    if (previewProject?._li) previewProject._li.classList.remove('hover');
+    if (previewProject?._marker) previewProject._marker.getElement().classList.remove('marker-highlight');
+    previewProject = null;
+    closeDetails();
   }
 
   function closeDetails() {
@@ -206,6 +262,7 @@
       map.fitBounds(bounds, { padding: 60, maxZoom: 17 });
     };
 
+
     if (!map.loaded()) {
       map.once('load', draw);
     } else {
@@ -214,6 +271,7 @@
   }
 
   function showHome() {
+    stickyProject = null;
     closeDetails();
     map.flyTo({ center: [data.principal.lon, data.principal.lat], zoom: data.principal.zoom || 13, duration: 1000 });
   }
@@ -222,9 +280,24 @@
   function goHome() { showHome(); }
   function toggleMenu() { alert('Menu'); }
 
-  backBtn.addEventListener('click', closeDetails);
+  backBtn.addEventListener('click', () => { stickyProject = null; closeDetails(); });
+
   routeToggle.addEventListener('change', (e) => {
     if (e.target.checked) showRoute(); else hideRoute();
+  });
+
+  window.addEventListener('glb-marker', (e) => {
+    const detail = e.detail || {};
+    const place = getSecondaryById(detail.placeId);
+    if (detail.type === 'hover') {
+      if (place) {
+        showPreview(place);
+      } else {
+        cancelPreview();
+      }
+    } else if (detail.type === 'click' && place) {
+      openDetails(place, true);
+    }
   });
 
   window.onload = function() {
