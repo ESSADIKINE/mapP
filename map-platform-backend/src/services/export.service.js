@@ -34,6 +34,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
     if (s.routesFromBase && s.routesFromBase.length) {
       s.routesFromBase.forEach((poly, idx) => {
         const coords = decodePolyline(poly);
+        if (coords.length < 2) return;
         routes.push({
           profile: profiles[idx] || profiles[0] || 'driving',
           distance_m: s.footerInfo?.distance ? parseInt(s.footerInfo.distance.replace(/\D/g, '')) : null,
@@ -79,10 +80,11 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
  * Export a project as a static bundle and stream it as a ZIP file.
  * @param {string} projectId
  * @param {{ inlineData?: boolean, includeLocalLibs?: boolean, mirrorImagesLocally?: boolean, styleURL?: string, profiles?: string[] }} options
+ *  inlineData defaults to true to embed project data and avoid file:// CORS issues.
  * @param {import('express').Response} res
  */
 export async function exportProject(projectId, options, res) {
-  const { inlineData = false, includeLocalLibs = true, mirrorImagesLocally = true } = options || {};
+  const { inlineData = true, includeLocalLibs = true, mirrorImagesLocally = true } = options || {};
 
   const doc = await Project.findById(projectId).lean();
   const data = buildExportData(doc, options);
