@@ -15,6 +15,8 @@ import projectRoutes from './routes/project.routes.js';
 import placeRoutes from './routes/place.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import routeRoutes from './routes/route.routes.js';
+import path from 'path';
+import fs from 'fs';
 
 const app = express();
 
@@ -47,6 +49,13 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:projectId/places', placeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/route', routeRoutes);
+
+// Serve uploaded 3D models
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 // Errors
 // eslint-disable-next-line no-unused-vars

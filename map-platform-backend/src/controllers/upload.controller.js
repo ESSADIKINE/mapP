@@ -6,16 +6,16 @@ import fs from 'fs';
 
 const cloudinary = configureCloudinary();
 
-// Create uploads_3D directory if it doesn't exist
-const uploads3DDir = path.join(process.cwd(), 'uploads_3D');
-if (!fs.existsSync(uploads3DDir)) {
-  fs.mkdirSync(uploads3DDir, { recursive: true });
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 // Storage for 3D models (local filesystem)
 const modelStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploads3DDir);
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     const uniqueName = `${Date.now()}_${file.originalname.replace(/\W+/g, '_')}`;
@@ -69,14 +69,14 @@ export const upload3DModel = (req, res) => {
 
   try {
     // Create a URL that can be accessed by the frontend
-    const modelUrl = `/uploads_3D/${req.file.filename}`;
-    
+    const modelUrl = `/uploads/${req.file.filename}`;
+
     res.json({
       url: modelUrl,
       filename: req.file.filename,
       originalName: req.file.originalname,
       size: req.file.size,
-      path: req.file.path
+      path: `./uploads/${req.file.filename}`
     });
   } catch (error) {
     console.error('3D model upload error:', error);
@@ -87,7 +87,7 @@ export const upload3DModel = (req, res) => {
 // Serve 3D model files
 export const serve3DModel = (req, res) => {
   const filename = req.params.filename;
-  const filePath = path.join(uploads3DDir, filename);
+  const filePath = path.join(uploadsDir, filename);
   
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'Model not found' });
