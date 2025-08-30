@@ -11,6 +11,13 @@ const basePlaceObject = z.object({
   heading: z.number().optional(),
   category: z.enum(['Principal', 'Secondary', 'Other']).optional(),
   routesFromBase: z.array(z.string()).optional(),
+  // 3D model fields
+  modelUrl: z.string().optional(), // URL to the 3D model file
+  modelPosition: z.object({
+    x: z.number().optional(),
+    y: z.number().optional(),
+    z: z.number().optional()
+  }).optional(),
   model3d: z
     .object({
       url: z.string().url(),

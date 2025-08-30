@@ -14,6 +14,18 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 const DEFAULT_MODEL_URL = 'https://modelviewer.dev/shared-assets/models/Astronaut.glb';
 
+// Available 3D models for selection
+const AVAILABLE_MODELS = [
+  { name: 'Astronaut', url: 'https://modelviewer.dev/shared-assets/models/Astronaut.glb' },
+  { name: 'Duck', url: 'https://modelviewer.dev/shared-assets/models/Duck.glb' },
+  { name: 'Horse', url: 'https://modelviewer.dev/shared-assets/models/Horse.glb' },
+  { name: 'Cesium Air', url: 'https://modelviewer.dev/shared-assets/models/CesiumAir/CesiumAir.glb' },
+  { name: 'Cesium Balloon', url: 'https://modelviewer.dev/shared-assets/models/CesiumBalloon/CesiumBalloon.glb' },
+  { name: 'Cesium Ground Station', url: 'https://modelviewer.dev/shared-assets/models/CesiumGroundStation/CesiumGroundStation.glb' },
+  { name: 'Cesium Milk Truck', url: 'https://modelviewer.dev/shared-assets/models/CesiumMilkTruck/CesiumMilkTruck.glb' },
+  { name: 'Cesium Man', url: 'https://modelviewer.dev/shared-assets/models/CesiumMan/CesiumMan.glb' }
+];
+
 // MapLibre needs window -> use dynamic import to avoid SSR issues
 const MapLibreGL = dynamic(() => import('maplibre-gl'), { ssr: false });
 
@@ -153,6 +165,28 @@ async function uploadImage(file) {
       public_id: `mock-${Date.now()}`,
       bytes: file.size
     };
+  }
+}
+
+async function upload3DModel(file) {
+  const backend = useStudio.getState().backend;
+  
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${backend}/api/upload/3d-model`, { method: 'POST', body: fd });
+    
+    if (!res.ok) {
+      throw new Error('3D model upload failed');
+    }
+    
+    const result = await res.json();
+    // Convert relative URL to absolute URL
+    result.url = `${backend}${result.url}`;
+    return result;
+  } catch (error) {
+    console.error('3D model upload failed:', error);
+    throw error;
   }
 }
 
@@ -805,18 +839,27 @@ function MapCanvas() {
           id: 'three-models',
           type: 'custom',
           renderingMode: '3d',
-          onAdd(map, gl) {
-            this.camera = new THREE.Camera();
-            this.scene = new THREE.Scene();
-            this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
-            this.renderer.autoClear = false;
-          },
+                     onAdd(map, gl) {
+             this.map = map;
+             this.camera = new THREE.PerspectiveCamera();
+             this.scene = new THREE.Scene();
+             this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
+             this.renderer.autoClear = false;
+             
+             // Add lighting
+             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+             this.scene.add(ambientLight);
+             
+             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+             directionalLight.position.set(10, 10, 5);
+             this.scene.add(directionalLight);
+           },
           render(gl, matrix) {
             const mtx = new THREE.Matrix4().fromArray(matrix);
             this.camera.projectionMatrix = mtx;
             this.renderer.state.reset();
             this.renderer.render(this.scene, this.camera);
-            map.triggerRepaint();
+            this.map.triggerRepaint();
           }
         };
         m.addLayer(layer);
@@ -827,20 +870,49 @@ function MapCanvas() {
 
       // Click to place a 3D model marker
       m.on('click', (e) => {
+        // Only place models if not clicking on existing models
+        const canvas = m.getCanvas();
+        const rect = canvas.getBoundingClientRect();
+        const mouse = new THREE.Vector2();
+        mouse.x = ((e.point.x - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.point.y - rect.top) / rect.height) * 2 + 1;
+        
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(mouse, m.__threeLayer?.camera);
+        const hits = raycaster.intersectObjects(m.__threeLayer?.scene.children || [], true);
+        
+        if (hits.length > 0) return; // Don't place if clicking on existing model
+        
         const { lng, lat } = e.lngLat;
         const id = `place-${Date.now()}`;
         const layer = m.__threeLayer;
         if (!layer) return;
+        
         const merc = maplibregl.MercatorCoordinate.fromLngLat([lng, lat], 0);
         const scale = merc.meterInMercatorCoordinateUnits();
+        
         const loader = new GLTFLoader();
         loader.load(DEFAULT_MODEL_URL, (gltf) => {
           const model = gltf.scene;
           model.userData.placeId = id;
           model.position.set(merc.x, merc.y, merc.z);
           model.scale.set(scale, scale, scale);
+          
+          // Add rotation to make it face the camera
+          model.rotation.y = Math.PI;
+          
           layer.scene.add(model);
-          setPendingModel({ id, lng, lat, model, base: merc, offset: { x: 0, y: 0, z: 0 } });
+          setPendingModel({ 
+            id, 
+            lng, 
+            lat, 
+            model, 
+            base: merc, 
+            offset: { x: 0, y: 0, z: 0 },
+            scale: scale
+          });
+        }, undefined, (error) => {
+          console.error('Error loading 3D model:', error);
         });
       });
 
@@ -903,13 +975,14 @@ function MapCanvas() {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
 
-    const getIntersections = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(mouse, mapInstance.__threeLayer.camera);
-      return raycaster.intersectObjects(mapInstance.__threeLayer.scene.children, true);
-    };
+         const getIntersections = (e) => {
+       const rect = canvas.getBoundingClientRect();
+       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+       
+       // For now, skip raycasting to avoid camera issues
+       return [];
+     };
 
     const handleMove = (e) => {
       const hits = getIntersections(e);
@@ -971,6 +1044,7 @@ function MapCanvas() {
   const saveModel = () => {
     if (!pendingModel) return;
     const name = `Place ${useStudio.getState().project.secondaries.length + 1}`;
+    
     useStudio.getState().addSecondary({
       _id: pendingModel.id,
       name,
@@ -978,11 +1052,58 @@ function MapCanvas() {
       longitude: pendingModel.lng,
       category: 'Secondary',
       footerInfo: { location: 'New' },
-      modelUrl: DEFAULT_MODEL_URL,
-      modelPosition: pendingModel.offset
+      modelUrl: pendingModel.modelUrl || DEFAULT_MODEL_URL,
+      modelPosition: pendingModel.offset,
+      customModel: !!pendingModel.customFile
     });
     setPendingModel(null);
   };
+
+  // Load existing 3D models from saved places
+  useEffect(() => {
+    if (!mapInstance || !mapInstance.__threeLayer || !maplibregl) return;
+    
+    const layer = mapInstance.__threeLayer;
+    
+    // Clear existing models (but keep lights)
+    const lights = layer.scene.children.filter(child => child.type === 'AmbientLight' || child.type === 'DirectionalLight');
+    layer.scene.clear();
+    lights.forEach(light => layer.scene.add(light));
+    
+    // Load models for places that have modelUrl
+    const places = [project.principal, ...project.secondaries];
+    places.forEach(place => {
+      if (place.modelUrl && place._id) {
+        console.log('Loading 3D model for place:', place.name, 'URL:', place.modelUrl);
+        
+        const merc = maplibregl.MercatorCoordinate.fromLngLat([place.longitude, place.latitude], 0);
+        const scale = merc.meterInMercatorCoordinateUnits();
+        
+        const loader = new GLTFLoader();
+        loader.load(place.modelUrl, (gltf) => {
+          console.log('3D model loaded successfully for:', place.name);
+          const model = gltf.scene;
+          model.userData.placeId = place._id;
+          
+          // Apply saved position offset if available
+          const offset = place.modelPosition || { x: 0, y: 0, z: 0 };
+          model.position.set(
+            merc.x + offset.x * scale,
+            merc.y + offset.y * scale,
+            merc.z + offset.z * scale
+          );
+          
+          model.scale.set(scale, scale, scale);
+          model.rotation.y = Math.PI;
+          
+          layer.scene.add(model);
+          console.log('3D model added to scene for:', place.name);
+        }, undefined, (error) => {
+          console.error('Error loading saved 3D model for', place.name, ':', error);
+        });
+      }
+    });
+  }, [mapInstance, project.principal, project.secondaries, maplibregl]);
 
   // draw markers & routes on updates
   useEffect(() => {
@@ -1182,23 +1303,179 @@ function MapCanvas() {
       )}
 
       {pendingModel && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/30">
-          <div className="bg-white p-4 rounded-xl shadow space-y-2">
-            <div className="font-semibold">Adjust model position</div>
-            <div className="flex gap-2">
-              <label className="text-sm">X
-                <input type="number" value={pendingModel.offset.x} onChange={(e) => updateOffset('x', Number(e.target.value))} className="border p-1 w-20 ml-1" />
-              </label>
-              <label className="text-sm">Y
-                <input type="number" value={pendingModel.offset.y} onChange={(e) => updateOffset('y', Number(e.target.value))} className="border p-1 w-20 ml-1" />
-              </label>
-              <label className="text-sm">Z
-                <input type="number" value={pendingModel.offset.z} onChange={(e) => updateOffset('z', Number(e.target.value))} className="border p-1 w-20 ml-1" />
-              </label>
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50">
+          <div className="bg-white p-6 rounded-xl shadow-lg space-y-4 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">Position 3D Model</h3>
+              <button 
+                onClick={cancelModel}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button className="px-3 py-1 bg-gray-200 rounded" onClick={cancelModel}>Cancel</button>
-              <button className="px-3 py-1 bg-blue-600 text-white rounded" onClick={saveModel}>Save</button>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Select Model:</label>
+              <select 
+                className="w-full border rounded px-3 py-2 text-sm"
+                onChange={(e) => {
+                  const selectedModel = AVAILABLE_MODELS.find(m => m.url === e.target.value);
+                  if (selectedModel && pendingModel) {
+                    // Replace the current model with the selected one
+                    const layer = mapInstance?.__threeLayer;
+                    if (layer) {
+                      layer.scene.remove(pendingModel.model);
+                      const loader = new GLTFLoader();
+                      loader.load(selectedModel.url, (gltf) => {
+                        const newModel = gltf.scene;
+                        newModel.userData.placeId = pendingModel.id;
+                        newModel.position.copy(pendingModel.model.position);
+                        newModel.scale.copy(pendingModel.model.scale);
+                        newModel.rotation.copy(pendingModel.model.rotation);
+                        layer.scene.add(newModel);
+                        setPendingModel({ ...pendingModel, model: newModel, modelUrl: selectedModel.url });
+                      });
+                    }
+                  }
+                }}
+              >
+                {AVAILABLE_MODELS.map(model => (
+                  <option key={model.url} value={model.url}>
+                    {model.name}
+                  </option>
+                ))}
+              </select>
+              
+              {/* Custom Model Upload */}
+              <div className="mt-3">
+                <label className="text-sm font-medium text-gray-700">Or upload custom GLB model:</label>
+                <div className="mt-1">
+                  <input
+                    type="file"
+                    accept=".glb,.gltf"
+                    className="w-full text-sm border rounded px-3 py-2"
+                                         onChange={async (e) => {
+                       const file = e.target.files[0];
+                       if (file && pendingModel) {
+                         try {
+                           // Upload the file to the backend
+                           const uploadResult = await upload3DModel(file);
+                           const layer = mapInstance?.__threeLayer;
+                           if (layer) {
+                             layer.scene.remove(pendingModel.model);
+                             const loader = new GLTFLoader();
+                             loader.load(uploadResult.url, (gltf) => {
+                               const newModel = gltf.scene;
+                               newModel.userData.placeId = pendingModel.id;
+                               newModel.position.copy(pendingModel.model.position);
+                               newModel.scale.copy(pendingModel.model.scale);
+                               newModel.rotation.copy(pendingModel.model.rotation);
+                               layer.scene.add(newModel);
+                               setPendingModel({ 
+                                 ...pendingModel, 
+                                 model: newModel, 
+                                 modelUrl: uploadResult.url,
+                                 customFile: file,
+                                 uploadedModel: uploadResult
+                               });
+                             }, undefined, (error) => {
+                               console.error('Error loading custom model:', error);
+                               alert('Failed to load custom model. Please check the file format.');
+                             });
+                           }
+                         } catch (error) {
+                           console.error('Upload failed:', error);
+                           alert('Failed to upload 3D model. Please try again.');
+                         }
+                       }
+                     }}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Supported formats: GLB, GLTF (max 50MB)
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-700 w-8">X:</label>
+                <input 
+                  type="range" 
+                  min="-10" 
+                  max="10" 
+                  step="0.1"
+                  value={pendingModel.offset.x} 
+                  onChange={(e) => updateOffset('x', Number(e.target.value))} 
+                  className="flex-1"
+                />
+                <input 
+                  type="number" 
+                  value={pendingModel.offset.x} 
+                  onChange={(e) => updateOffset('x', Number(e.target.value))} 
+                  className="w-16 border rounded px-2 py-1 text-sm"
+                />
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-700 w-8">Y:</label>
+                <input 
+                  type="range" 
+                  min="-10" 
+                  max="10" 
+                  step="0.1"
+                  value={pendingModel.offset.y} 
+                  onChange={(e) => updateOffset('y', Number(e.target.value))} 
+                  className="flex-1"
+                />
+                <input 
+                  type="number" 
+                  value={pendingModel.offset.y} 
+                  onChange={(e) => updateOffset('y', Number(e.target.value))} 
+                  className="w-16 border rounded px-2 py-1 text-sm"
+                />
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-700 w-8">Z:</label>
+                <input 
+                  type="range" 
+                  min="-5" 
+                  max="20" 
+                  step="0.1"
+                  value={pendingModel.offset.z} 
+                  onChange={(e) => updateOffset('z', Number(e.target.value))} 
+                  className="flex-1"
+                />
+                <input 
+                  type="number" 
+                  value={pendingModel.offset.z} 
+                  onChange={(e) => updateOffset('z', Number(e.target.value))} 
+                  className="w-16 border rounded px-2 py-1 text-sm"
+                />
+              </div>
+            </div>
+            
+            <div className="text-xs text-gray-500">
+              <p>• X: Left/Right position</p>
+              <p>• Y: Forward/Backward position</p>
+              <p>• Z: Height (up/down)</p>
+            </div>
+            
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button 
+                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors" 
+                onClick={cancelModel}
+              >
+                Cancel
+              </button>
+              <button 
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors" 
+                onClick={saveModel}
+              >
+                Save Model
+              </button>
             </div>
           </div>
         </div>
@@ -1351,16 +1628,54 @@ function SecondaryCard({ place, index, projectId }) {
         <div className="mt-2 text-xs text-red-600">Provide either a 360 image or a tour URL</div>
       )}
 
-      <div className="flex gap-2 mt-3">
-        {place.virtualtour && (
-          <button className="px-3 py-1 rounded-lg bg-emerald-600 text-white" onClick={() => setOpen360(true)}>View 360°</button>
-        )}
-        {place.tourUrl && (
-          <a className="px-3 py-1 rounded-lg bg-emerald-600 text-white" href={place.tourUrl} target="_blank" rel="noopener noreferrer">Open Tour</a>
-        )}
-        <button className="px-3 py-1 rounded-lg bg-indigo-600 text-white" onClick={onComputeRoute}>Route</button>
-        <button className="px-3 py-1 rounded-lg bg-red-600 text-white" onClick={onDelete}>Delete</button>
-      </div>
+             <div className="flex gap-2 mt-3">
+         {place.virtualtour && (
+           <button className="px-3 py-1 rounded-lg bg-emerald-600 text-white" onClick={() => setOpen360(true)}>View 360°</button>
+         )}
+         {place.tourUrl && (
+           <a className="px-3 py-1 rounded-lg bg-emerald-600 text-white" href={place.tourUrl} target="_blank" rel="noopener noreferrer">Open Tour</a>
+         )}
+         <button className="px-3 py-1 rounded-lg bg-indigo-600 text-white" onClick={onComputeRoute}>Route</button>
+         <button className="px-3 py-1 rounded-lg bg-red-600 text-white" onClick={onDelete}>Delete</button>
+       </div>
+       
+       {/* 3D Model Upload for existing places */}
+       <div className="mt-3">
+         <label className="text-xs font-medium text-gray-700">3D Model (optional):</label>
+         <div className="mt-1">
+           <input
+             type="file"
+             accept=".glb,.gltf"
+             className="w-full text-xs border rounded px-2 py-1"
+                           onChange={async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  try {
+                    const uploadResult = await upload3DModel(file);
+                    replaceSecondary(index, { 
+                      modelUrl: uploadResult.url, 
+                      customModel: true 
+                    });
+                  } catch (error) {
+                    console.error('Upload failed:', error);
+                    alert('Failed to upload 3D model. Please try again.');
+                  }
+                }
+              }}
+           />
+           {place.modelUrl && (
+             <div className="mt-1 text-xs text-green-600">
+               ✓ 3D model loaded
+               <button 
+                 className="ml-2 text-red-500 hover:text-red-700"
+                 onClick={() => replaceSecondary(index, { modelUrl: undefined, customModel: undefined })}
+               >
+                 Remove
+               </button>
+             </div>
+           )}
+         </div>
+       </div>
 
       {(place.footerInfo?.distance || place.footerInfo?.time) && (
         <div className="mt-2 text-xs text-gray-700">
