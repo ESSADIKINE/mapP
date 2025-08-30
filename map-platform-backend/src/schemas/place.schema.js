@@ -49,3 +49,7 @@ export const principalPlaceZ = basePlaceObject
 export const secondaryPlaceZ = basePlaceObject
   .extend({ category: z.literal('Secondary').optional() })
   .refine(mediaCheck, mediaRefinement);
+
+// Partial schemas useful for updates where fields are optional
+export const principalPlacePartialZ = principalPlaceZ.partial();
+export const secondaryPlacePartialZ = secondaryPlaceZ.partial();
