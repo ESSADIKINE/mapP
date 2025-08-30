@@ -20,7 +20,8 @@ const basePlaceObject = z.object({
   }).optional(),
   model3d: z
     .object({
-      url: z.string().url(),
+      // Accept absolute URLs or relative paths like "./uploads/model.glb"
+      url: z.string().min(1),
       useAsMarker: z.boolean().optional(),
       scale: z.number().optional(),
       rotation: z.array(z.number()).length(3).optional(),
