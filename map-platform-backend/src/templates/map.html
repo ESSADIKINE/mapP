@@ -8,6 +8,7 @@
   {{LIB_STYLES}}
 </head>
 <body>
+  <div id="loading" class="loading">Loading...</div>
   <!-- Header -->
   <header id="header" class="header">
     <div id="logo" class="logo">{{HEADER_LOGO}}</div>
@@ -30,21 +31,24 @@
       <div id="map" class="map"></div>
     </div>
 
-    <!-- Right-side info card (hidden by default) -->
-    <aside id="infoPanel" class="info-panel hidden">
-      <div class="info-header">
-        <div id="infoTitle" class="info-title">Place</div>
-        <button class="info-close" onclick="hideInfoPanel()">×</button>
+    <!-- Secondary places sidebar -->
+    <aside id="secondarySidebar" class="secondary-sidebar">
+      <div id="listView">
+        <ul id="secondaryList" class="secondary-list"></ul>
       </div>
-      <div class="info-body">
-        <div id="panoSmall" class="pano-small"></div>
-        <div id="infoMeta" class="info-meta">
-          <span id="infoDistance"></span>
-          <span id="infoTime"></span>
+      <div id="detailsView" class="details-view hidden">
+        <button id="backBtn" class="details-back">Back</button>
+        <h3 id="detailTitle"></h3>
+        <div class="coords">
+          <span id="detailCoords"></span>
+          <button id="copyCoordsBtn">Copy</button>
         </div>
-        <div class="info-actions">
-          <button id="showRouteBtn" class="route-button" onclick="showRoute()">Show Route</button>
+        <div id="detailMedia" class="pano-small"></div>
+        <div id="detailMeta" class="info-meta">
+          <span id="detailDistance"></span>
+          <span id="detailTime"></span>
         </div>
+        <label class="route-toggle"><input type="checkbox" id="routeToggle"> Show route</label>
       </div>
     </aside>
   </div>

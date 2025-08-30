@@ -6,6 +6,7 @@ export interface Project {
   title: string
   logoUrl?: string
   description?: string
+  styleURL?: string
   principal: Place
   secondaries: Place[]
   createdAt: string
@@ -18,11 +19,19 @@ export interface Place {
   latitude: number
   longitude: number
   virtualtour?: string
+  tourUrl?: string
   zoom?: number
   bounds?: [number, number][]
   heading?: number
   category: 'Principal' | 'Secondary' | 'Other'
   routesFromBase?: string[]
+  model3d?: {
+    url: string
+    useAsMarker?: boolean
+    scale?: number
+    rotation?: [number, number, number]
+    altitude?: number
+  }
   footerInfo?: {
     location?: string
     distance?: string
