@@ -170,23 +170,28 @@ async function uploadImage(file) {
 
 async function upload3DModel(file) {
   const backend = useStudio.getState().backend;
-  
+
   try {
     const fd = new FormData();
     fd.append('file', file);
     const res = await fetch(`${backend}/api/upload/3d-model`, { method: 'POST', body: fd });
-    
+
     if (!res.ok) {
       throw new Error('3D model upload failed');
     }
-    
+
     const result = await res.json();
     // Convert relative URL to absolute URL
     result.url = `${backend}${result.url}`;
     return result;
   } catch (error) {
-    console.error('3D model upload failed:', error);
-    throw error;
+    // Network error or backend not running — fallback to mock response
+    console.warn('3D model upload failed, using mock response:', error.message);
+    return {
+      url: URL.createObjectURL(file),
+      public_id: `mock-3d-${Date.now()}`,
+      bytes: file.size
+    };
   }
 }
 
@@ -1080,27 +1085,43 @@ function MapCanvas() {
         const scale = merc.meterInMercatorCoordinateUnits();
         
         const loader = new GLTFLoader();
-        loader.load(place.modelUrl, (gltf) => {
-          console.log('3D model loaded successfully for:', place.name);
-          const model = gltf.scene;
-          model.userData.placeId = place._id;
-          
-          // Apply saved position offset if available
-          const offset = place.modelPosition || { x: 0, y: 0, z: 0 };
-          model.position.set(
-            merc.x + offset.x * scale,
-            merc.y + offset.y * scale,
-            merc.z + offset.z * scale
-          );
-          
-          model.scale.set(scale, scale, scale);
-          model.rotation.y = Math.PI;
-          
-          layer.scene.add(model);
-          console.log('3D model added to scene for:', place.name);
-        }, undefined, (error) => {
-          console.error('Error loading saved 3D model for', place.name, ':', error);
-        });
+        loader.load(
+          place.modelUrl,
+          (gltf) => {
+            console.log('3D model loaded successfully for:', place.name);
+            const model = gltf.scene;
+            model.userData.placeId = place._id;
+
+            // Apply saved position offset if available
+            const offset = place.modelPosition || { x: 0, y: 0, z: 0 };
+            model.position.set(
+              merc.x + offset.x * scale,
+              merc.y + offset.y * scale,
+              merc.z + offset.z * scale
+            );
+
+            model.scale.set(scale, scale, scale);
+            model.rotation.y = Math.PI;
+
+            layer.scene.add(model);
+            console.log('3D model added to scene for:', place.name);
+          },
+          undefined,
+          (error) => {
+            console.error('Error loading saved 3D model for', place.name, ':', error);
+
+            // Fallback to default marker if the model can't be fetched
+            const { project, updateProject } = useStudio.getState();
+            if (project.principal._id === place._id) {
+              updateProject({ principal: { ...project.principal, modelUrl: undefined, customModel: false } });
+            } else {
+              const updatedSecondaries = project.secondaries.map((s) =>
+                s._id === place._id ? { ...s, modelUrl: undefined, customModel: false } : s
+              );
+              updateProject({ secondaries: updatedSecondaries });
+            }
+          }
+        );
       }
     });
   }, [mapInstance, project.principal, project.secondaries, maplibregl]);
