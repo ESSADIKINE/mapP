@@ -5,6 +5,11 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { connectDB } from './config/db.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import projectRoutes from './routes/project.routes.js';
 import placeRoutes from './routes/place.routes.js';
@@ -33,6 +38,9 @@ app.use(
 
 // Health
 app.get('/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+
+// Static file serving for 3D models
+app.use('/uploads_3D', express.static(path.join(__dirname, '../uploads_3D')));
 
 // Routes
 app.use('/api/projects', projectRoutes);

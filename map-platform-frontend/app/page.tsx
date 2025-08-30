@@ -180,10 +180,10 @@ async function upload3DModel(file) {
       throw new Error('3D model upload failed');
     }
 
-    const result = await res.json();
-    // Convert relative URL to absolute URL
-    result.url = `${backend}${result.url}`;
-    return result;
+         const result = await res.json();
+     // Use direct static file serving
+     result.url = `${backend}/uploads_3D/${result.filename}`;
+     return result;
   } catch (error) {
     // Network error or backend not running — fallback to mock response
     console.warn('3D model upload failed, using mock response:', error.message);
