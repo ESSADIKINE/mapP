@@ -27,7 +27,17 @@ const basePlaceSchema = z.object({
       time: z.string().optional()
     })
     .optional()
-});
+  }).refine(
+    (p) => {
+      const hasPano = !!p.virtualtour;
+      const hasTour = !!p.tourUrl;
+      return (hasPano || hasTour) && !(hasPano && hasTour);
+    },
+    {
+      message: 'Each place requires exactly one media: 360 image or tour URL',
+      path: ['virtualtour']
+    }
+  );
 
 // Create extended schemas first
 const principalPlaceSchema = basePlaceSchema.extend({

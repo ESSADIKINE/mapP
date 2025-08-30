@@ -28,7 +28,8 @@
   const detailTime = document.getElementById('detailTime');
   const routeToggle = document.getElementById('routeToggle');
   const backBtn = document.getElementById('backBtn');
-  const TOUR_WHITELIST = ['my.matterport.com','kuula.co'];
+  const TOUR_WHITELIST = ['my.matterport.com','kuula.co','youzvirtualtour.com'];
+
   const logoEl = document.getElementById('logo');
 
   if (logoEl) {
@@ -245,18 +246,6 @@
         await ensureThree();
         setupModels();
       }
-    });
-
-    map.on('load', () => {
-      if (loadingEl) loadingEl.style.display = 'none';
-      if (isFinite(data.principal.lon) && isFinite(data.principal.lat)) {
-        new maplibregl.Marker({ color: '#111827' })
-          .setLngLat([data.principal.lon, data.principal.lat])
-          .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
-          .addTo(map);
-      }
-
-      populateSecondaries();
     });
 
     map.on('error', (error) => {
@@ -495,7 +484,6 @@
   function toggleMenu() { alert('Menu'); }
 
   backBtn.addEventListener('click', () => { stickyProject = null; closeDetails(); });
-
   routeToggle.addEventListener('change', (e) => {
     if (e.target.checked) showRoute(); else hideRoute();
   });
