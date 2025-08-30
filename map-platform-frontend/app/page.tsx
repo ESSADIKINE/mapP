@@ -170,23 +170,29 @@ async function uploadImage(file) {
 
 async function upload3DModel(file) {
   const backend = useStudio.getState().backend;
-  
+
   try {
     const fd = new FormData();
     fd.append('file', file);
     const res = await fetch(`${backend}/api/upload/3d-model`, { method: 'POST', body: fd });
-    
+
     if (!res.ok) {
       throw new Error('3D model upload failed');
     }
-    
+
     const result = await res.json();
-    // Convert relative URL to absolute URL
-    result.url = `${backend}${result.url}`;
+    const relativeUrl = result.path || result.url;
+    result.url = `${backend}${result.url}`; // absolute for immediate use
+    result.relativeUrl = relativeUrl; // store relative path for DB
     return result;
   } catch (error) {
-    console.error('3D model upload failed:', error);
-    throw error;
+    // Network error or backend not running — fallback to mock response
+    console.warn('3D model upload failed, using mock response:', error.message);
+    return {
+      url: URL.createObjectURL(file),
+      public_id: `mock-3d-${Date.now()}`,
+      bytes: file.size
+    };
   }
 }
 
@@ -196,11 +202,15 @@ async function upload3DModel(file) {
  * @param {Project} project
  */
 function sanitizeProject(project) {
-  const cleanPlace = (p) => ({
-    ...p,
-    virtualtour: p.virtualtour || undefined,
-    tourUrl: p.tourUrl || undefined
-  });
+  const cleanPlace = (p) => {
+    const { modelUrl, modelPath, ...rest } = p;
+    return {
+      ...rest,
+      virtualtour: p.virtualtour || undefined,
+      tourUrl: p.tourUrl || undefined,
+      model3d: modelPath ? { url: modelPath } : p.model3d || undefined
+    };
+  };
 
   return {
     ...project,
@@ -239,7 +249,17 @@ async function saveProject(project) {
       };
     }
     
-    return res.json();
+    const saved = await res.json();
+    const mapPlace = (p) => ({
+      ...p,
+      modelUrl: p.model3d?.url ? `${backend}${p.model3d.url.replace(/^\./, '')}` : undefined,
+      modelPath: p.model3d?.url
+    });
+    return {
+      ...saved,
+      principal: mapPlace(saved.principal),
+      secondaries: saved.secondaries.map(mapPlace)
+    };
   } catch (error) {
     // Network error or backend not running
     console.warn('Backend connection failed, using mock response:', error.message);
@@ -1053,6 +1073,7 @@ function MapCanvas() {
       category: 'Secondary',
       footerInfo: { location: 'New' },
       modelUrl: pendingModel.modelUrl || DEFAULT_MODEL_URL,
+      modelPath: pendingModel.modelPath,
       modelPosition: pendingModel.offset,
       customModel: !!pendingModel.customFile
     });
@@ -1080,27 +1101,43 @@ function MapCanvas() {
         const scale = merc.meterInMercatorCoordinateUnits();
         
         const loader = new GLTFLoader();
-        loader.load(place.modelUrl, (gltf) => {
-          console.log('3D model loaded successfully for:', place.name);
-          const model = gltf.scene;
-          model.userData.placeId = place._id;
-          
-          // Apply saved position offset if available
-          const offset = place.modelPosition || { x: 0, y: 0, z: 0 };
-          model.position.set(
-            merc.x + offset.x * scale,
-            merc.y + offset.y * scale,
-            merc.z + offset.z * scale
-          );
-          
-          model.scale.set(scale, scale, scale);
-          model.rotation.y = Math.PI;
-          
-          layer.scene.add(model);
-          console.log('3D model added to scene for:', place.name);
-        }, undefined, (error) => {
-          console.error('Error loading saved 3D model for', place.name, ':', error);
-        });
+        loader.load(
+          place.modelUrl,
+          (gltf) => {
+            console.log('3D model loaded successfully for:', place.name);
+            const model = gltf.scene;
+            model.userData.placeId = place._id;
+
+            // Apply saved position offset if available
+            const offset = place.modelPosition || { x: 0, y: 0, z: 0 };
+            model.position.set(
+              merc.x + offset.x * scale,
+              merc.y + offset.y * scale,
+              merc.z + offset.z * scale
+            );
+
+            model.scale.set(scale, scale, scale);
+            model.rotation.y = Math.PI;
+
+            layer.scene.add(model);
+            console.log('3D model added to scene for:', place.name);
+          },
+          undefined,
+          (error) => {
+            console.error('Error loading saved 3D model for', place.name, ':', error);
+
+            // Fallback to default marker if the model can't be fetched
+            const { project, updateProject } = useStudio.getState();
+            if (project.principal._id === place._id) {
+              updateProject({ principal: { ...project.principal, modelUrl: undefined, modelPath: undefined, customModel: false } });
+            } else {
+              const updatedSecondaries = project.secondaries.map((s) =>
+                s._id === place._id ? { ...s, modelUrl: undefined, modelPath: undefined, customModel: false } : s
+              );
+              updateProject({ secondaries: updatedSecondaries });
+            }
+          }
+        );
       }
     });
   }, [mapInstance, project.principal, project.secondaries, maplibregl]);
@@ -1372,10 +1409,11 @@ function MapCanvas() {
                                newModel.scale.copy(pendingModel.model.scale);
                                newModel.rotation.copy(pendingModel.model.rotation);
                                layer.scene.add(newModel);
-                               setPendingModel({ 
-                                 ...pendingModel, 
-                                 model: newModel, 
+                               setPendingModel({
+                                 ...pendingModel,
+                                 model: newModel,
                                  modelUrl: uploadResult.url,
+                                 modelPath: uploadResult.relativeUrl,
                                  customFile: file,
                                  uploadedModel: uploadResult
                                });
@@ -1490,6 +1528,7 @@ function MapCanvas() {
 function SecondaryCard({ place, index, projectId }) {
   const { replaceSecondary, project, backend, removeSecondary } = useStudio();
   const [open360, setOpen360] = useState(false);
+  const [openTour, setOpenTour] = useState(false);
   const id = `sec-${index}`;
 
   // When we "compute route", we must have IDs — in this demo we fake IDs by saving once
@@ -1520,7 +1559,8 @@ function SecondaryCard({ place, index, projectId }) {
           heading: refreshedPlace.heading || undefined,
           zoom: refreshedPlace.zoom || undefined,
           bounds: refreshedPlace.bounds || undefined,
-          footerInfo: refreshedPlace.footerInfo || undefined
+          footerInfo: refreshedPlace.footerInfo || undefined,
+          model3d: refreshedPlace.modelPath ? { url: refreshedPlace.modelPath } : undefined
         };
         const res = await fetch(`${backend}/api/projects/${pid}/places`, {
           method: 'POST',
@@ -1633,7 +1673,12 @@ function SecondaryCard({ place, index, projectId }) {
            <button className="px-3 py-1 rounded-lg bg-emerald-600 text-white" onClick={() => setOpen360(true)}>View 360°</button>
          )}
          {place.tourUrl && (
-           <a className="px-3 py-1 rounded-lg bg-emerald-600 text-white" href={place.tourUrl} target="_blank" rel="noopener noreferrer">Open Tour</a>
+           <button
+             className="px-3 py-1 rounded-lg bg-emerald-600 text-white"
+             onClick={() => setOpenTour(true)}
+           >
+             View Tour
+           </button>
          )}
          <button className="px-3 py-1 rounded-lg bg-indigo-600 text-white" onClick={onComputeRoute}>Route</button>
          <button className="px-3 py-1 rounded-lg bg-red-600 text-white" onClick={onDelete}>Delete</button>
@@ -1652,9 +1697,10 @@ function SecondaryCard({ place, index, projectId }) {
                 if (file) {
                   try {
                     const uploadResult = await upload3DModel(file);
-                    replaceSecondary(index, { 
-                      modelUrl: uploadResult.url, 
-                      customModel: true 
+                    replaceSecondary(index, {
+                      modelUrl: uploadResult.url,
+                      modelPath: uploadResult.relativeUrl,
+                      customModel: true
                     });
                   } catch (error) {
                     console.error('Upload failed:', error);
@@ -1668,7 +1714,7 @@ function SecondaryCard({ place, index, projectId }) {
                ✓ 3D model loaded
                <button 
                  className="ml-2 text-red-500 hover:text-red-700"
-                 onClick={() => replaceSecondary(index, { modelUrl: undefined, customModel: undefined })}
+                 onClick={() => replaceSecondary(index, { modelUrl: undefined, modelPath: undefined, customModel: undefined })}
                >
                  Remove
                </button>
@@ -1698,6 +1744,13 @@ function SecondaryCard({ place, index, projectId }) {
           />
         ) : (
           <div className="w-full h-full grid place-items-center text-gray-500">No 360 image yet</div>
+        )}
+      </Modal>
+      <Modal open={openTour} onClose={() => setOpenTour(false)} title={`${place.name} – Tour`}>
+        {place.tourUrl ? (
+          <iframe src={place.tourUrl} className="w-full h-full" allowFullScreen />
+        ) : (
+          <div className="w-full h-full grid place-items-center text-gray-500">No tour URL yet</div>
         )}
       </Modal>
     </div>

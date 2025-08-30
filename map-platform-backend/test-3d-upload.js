@@ -12,10 +12,10 @@ async function test3DUpload() {
     // Create a simple test GLB file (this is just a placeholder)
     const testFilePath = path.join(process.cwd(), 'test-model.glb');
     
-    // Check if uploads_3D directory exists
-    const uploadsDir = path.join(process.cwd(), 'uploads_3D');
+    // Check if uploads directory exists
+    const uploadsDir = path.join(process.cwd(), 'uploads');
     if (!fs.existsSync(uploadsDir)) {
-      console.log('Creating uploads_3D directory...');
+      console.log('Creating uploads directory...');
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
     

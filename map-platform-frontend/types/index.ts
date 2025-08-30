@@ -25,6 +25,8 @@ export interface Place {
   heading?: number
   category: 'Principal' | 'Secondary' | 'Other'
   routesFromBase?: string[]
+  modelUrl?: string
+  modelPath?: string
   model3d?: {
     url: string
     useAsMarker?: boolean
