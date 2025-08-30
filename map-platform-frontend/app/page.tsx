@@ -191,7 +191,8 @@ async function upload3DModel(file) {
     return {
       url: URL.createObjectURL(file),
       public_id: `mock-3d-${Date.now()}`,
-      bytes: file.size
+      bytes: file.size,
+      relativeUrl: null
     };
   }
 }
@@ -864,6 +865,8 @@ function MapCanvas() {
              this.camera = new THREE.PerspectiveCamera();
              this.scene = new THREE.Scene();
              this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
+             // disable WebXR to avoid "xr-spatial-tracking" permission warnings
+             this.renderer.xr.enabled = false;
              this.renderer.autoClear = false;
              
              // Add lighting
