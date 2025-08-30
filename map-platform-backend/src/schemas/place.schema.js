@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const basePlaceSchema = z.object({
+const basePlaceObject = z.object({
   name: z.string().min(1),
   latitude: z.number(),
   longitude: z.number(),
@@ -17,67 +17,35 @@ const basePlaceSchema = z.object({
       useAsMarker: z.boolean().optional(),
       scale: z.number().optional(),
       rotation: z.array(z.number()).length(3).optional(),
-      altitude: z.number().optional()
+      altitude: z.number().optional(),
     })
     .optional(),
   footerInfo: z
     .object({
       location: z.string().optional(),
       distance: z.string().optional(),
-      time: z.string().optional()
+      time: z.string().optional(),
     })
-    .optional()
-  }).refine(
-    (p) => {
-      const hasPano = !!p.virtualtour;
-      const hasTour = !!p.tourUrl;
-      return (hasPano || hasTour) && !(hasPano && hasTour);
-    },
-    {
-      message: 'Each place requires exactly one media: 360 image or tour URL',
-      path: ['virtualtour']
-    }
-  );
-
-// Create extended schemas first
-const principalPlaceSchema = basePlaceSchema.extend({
-  category: z.literal('Principal').optional()
+    .optional(),
 });
 
-const secondaryPlaceSchema = basePlaceSchema.extend({
-  category: z.literal('Secondary').optional()
-});
+const mediaRefinement = {
+  message: 'Each place requires exactly one media: 360 image or tour URL',
+  path: ['virtualtour'],
+};
 
-// Create partial versions for updates
-const basePlacePartialSchema = basePlaceSchema.partial();
-const principalPlacePartialSchema = principalPlaceSchema.partial();
-const secondaryPlacePartialSchema = secondaryPlaceSchema.partial();
-
-// Validation function for media requirements
-const validateMedia = (p) => {
+const mediaCheck = (p) => {
   const hasPano = !!p.virtualtour;
   const hasTour = !!p.tourUrl;
   return (hasPano || hasTour) && !(hasPano && hasTour);
 };
 
-// Apply refine validation to the base schema
-export const basePlaceZ = basePlaceSchema.refine(validateMedia, {
-  message: 'Each place requires exactly one media: 360 image or tour URL',
-  path: ['virtualtour']
-});
+export const basePlaceZ = basePlaceObject.refine(mediaCheck, mediaRefinement);
 
-// Apply the same refine validation to extended schemas
-export const principalPlaceZ = principalPlaceSchema.refine(validateMedia, {
-  message: 'Each place requires exactly one media: 360 image or tour URL',
-  path: ['virtualtour']
-});
+export const principalPlaceZ = basePlaceObject
+  .extend({ category: z.literal('Principal').optional() })
+  .refine(mediaCheck, mediaRefinement);
 
-export const secondaryPlaceZ = secondaryPlaceSchema.refine(validateMedia, {
-  message: 'Each place requires exactly one media: 360 image or tour URL',
-  path: ['virtualtour']
-});
-
-// Export partial schemas for updates (without refine validation since updates might be partial)
-export const basePlacePartialZ = basePlacePartialSchema;
-export const principalPlacePartialZ = principalPlacePartialSchema;
-export const secondaryPlacePartialZ = secondaryPlacePartialSchema;
+export const secondaryPlaceZ = basePlaceObject
+  .extend({ category: z.literal('Secondary').optional() })
+  .refine(mediaCheck, mediaRefinement);
