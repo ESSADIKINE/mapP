@@ -25,7 +25,8 @@ const ReactPannellum = dynamic(() => import('react-pannellum'), { ssr: false });
  *  latitude: number,
  *  longitude: number,
  *  virtualtour?: string,
- *  zoom?: number,
+ *  tourUrl?: string,
+*  zoom?: number,
  *  bounds?: number[][],
  *  heading?: number,
  *  category: 'Principal' | 'Secondary' | 'Other',
@@ -39,6 +40,7 @@ const ReactPannellum = dynamic(() => import('react-pannellum'), { ssr: false });
  *  title: string,
  *  logoUrl?: string,
  *  description?: string,
+ *  styleURL?: string,
  *  principal: Place,
  *  secondaries: Place[]
  * }} Project
@@ -49,11 +51,11 @@ const ReactPannellum = dynamic(() => import('react-pannellum'), { ssr: false });
 
 const useStudio = create((set, get) => ({
   backend: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000',
-  mapStyle: process.env.NEXT_PUBLIC_MAP_STYLE || 'https://demotiles.maplibre.org/style.json',
 
   project: /** @type {Project} */ ({
     title: 'Untitled Project',
     description: 'Describe your project…',
+    styleURL: '',
     logoUrl: '',
     principal: {
       name: 'Residence',
@@ -81,14 +83,14 @@ const useStudio = create((set, get) => ({
     console.log('Setting map instance:', m);
     set({ mapInstance: m });
   },
-  addSecondary: (place) => set({ 
-    project: { 
-      ...get().project, 
+  addSecondary: (place) => set({
+    project: {
+      ...get().project,
       secondaries: [...get().project.secondaries, {
         ...place,
         _id: place._id || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      }] 
-    } 
+      }]
+    }
   }),
   reorderSecondaries: (from, to) => {
     const s = [...get().project.secondaries];
@@ -98,6 +100,11 @@ const useStudio = create((set, get) => ({
   replaceSecondary: (idx, patch) => {
     const s = [...get().project.secondaries];
     s[idx] = { ...s[idx], ...patch };
+    set({ project: { ...get().project, secondaries: s } });
+  },
+  removeSecondary: (idx) => {
+    const s = [...get().project.secondaries];
+    s.splice(idx, 1);
     set({ project: { ...get().project, secondaries: s } });
   }
 }));
@@ -147,12 +154,14 @@ async function uploadImage(file) {
 function sanitizeProject(project) {
   const cleanPlace = (p) => ({
     ...p,
-    virtualtour: p.virtualtour || undefined
+    virtualtour: p.virtualtour || undefined,
+    tourUrl: p.tourUrl || undefined
   });
 
   return {
     ...project,
     logoUrl: project.logoUrl || undefined,
+    styleURL: project.styleURL || undefined,
     principal: cleanPlace(project.principal),
     secondaries: project.secondaries.map(cleanPlace)
   };
@@ -611,7 +620,7 @@ function Modal({ open, onClose, children, title }) {
 // Map Canvas
 
 function MapCanvas() {
-  const { mapStyle, map: maplibregl, setMapLib, mapInstance, setMapInstance, project, replaceSecondary } = useStudio();
+  const { map: maplibregl, setMapLib, mapInstance, setMapInstance, project, replaceSecondary } = useStudio();
   const mapRef = useRef(null);
   const [ready, setReady] = useState(false);
   const isMountedRef = useRef(true);
@@ -678,39 +687,42 @@ function MapCanvas() {
     }
     
     try {
-      console.log('Initializing map with satellite tiles');
-      
+      const style = project.styleURL
+        ? project.styleURL
+        : {
+            version: 8,
+            sources: {
+              satellite: {
+                type: 'raster',
+                tiles: [
+                  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                ],
+                tileSize: 256,
+                attribution: '© Esri'
+              }
+            },
+            layers: [
+              {
+                id: 'satellite-layer',
+                type: 'raster',
+                source: 'satellite',
+                minzoom: 0,
+                maxzoom: 20
+              }
+            ]
+          };
+
       const m = new maplibregl.Map({
         container: mapRef.current,
-        style: {
-          version: 8,
-          sources: {
-            'satellite': {
-              type: 'raster',
-              tiles: [
-                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-              ],
-              tileSize: 256,
-              attribution: '© Esri'
-            }
-          },
-          layers: [
-            {
-              id: 'satellite-layer',
-              type: 'raster',
-              source: 'satellite',
-              minzoom: 0,
-              maxzoom: 20
-            }
-          ]
-        },
+        style,
         center: [project.principal.longitude, project.principal.latitude],
         zoom: project.principal.zoom || 14
       });
-      
+
       console.log('Map instance created:', m);
-      
+
       m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
+      m.addControl(new maplibregl.AttributionControl({ compact: true }));
 
       // Set up event listeners before setting the instance
       m.on('load', () => {
@@ -727,7 +739,12 @@ function MapCanvas() {
       m.on('error', (error) => {
         console.error('Map error:', error);
         // Try fallback satellite source if main source fails
-        if (error.error && error.error.message && error.error.message.includes('tile')) {
+        if (
+          !project.styleURL &&
+          error.error &&
+          error.error.message &&
+          error.error.message.includes('tile')
+        ) {
           console.log('Trying fallback satellite source...');
           if (!m._removed) {
             m.addSource('fallback-satellite', {
@@ -833,7 +850,7 @@ function MapCanvas() {
       // Set ready to true even if there's an error so the UI doesn't get stuck
       setReady(true);
     }
-  }, [maplibregl, mapInstance, mapStyle, project.principal, project.secondaries.length, setMapInstance]);
+  }, [maplibregl, mapInstance, project.styleURL, project.principal, project.secondaries.length, setMapInstance]);
 
   // draw markers & routes on updates
   useEffect(() => {
@@ -1001,7 +1018,7 @@ function MapCanvas() {
 // Secondary Place Card (sortable)
 
 function SecondaryCard({ place, index, projectId }) {
-  const { replaceSecondary, project } = useStudio();
+  const { replaceSecondary, project, backend, removeSecondary } = useStudio();
   const [open360, setOpen360] = useState(false);
   const id = `sec-${index}`;
 
@@ -1029,6 +1046,7 @@ function SecondaryCard({ place, index, projectId }) {
           longitude: refreshedPlace.longitude,
           category: refreshedPlace.category || 'Secondary',
           virtualtour: refreshedPlace.virtualtour || undefined,
+          tourUrl: refreshedPlace.tourUrl || undefined,
           heading: refreshedPlace.heading || undefined,
           zoom: refreshedPlace.zoom || undefined,
           bounds: refreshedPlace.bounds || undefined,
@@ -1079,10 +1097,22 @@ function SecondaryCard({ place, index, projectId }) {
   async function onUpload360(file) {
     try {
       const res = await uploadImage(file);
-      replaceSecondary(index, { virtualtour: res.url });
+      replaceSecondary(index, { virtualtour: res.url, tourUrl: undefined });
     } catch (e) {
       alert('Upload failed');
     }
+  }
+
+  async function onDelete() {
+    if (!window.confirm('Delete this place?')) return;
+    try {
+      if (project._id && place._id && !String(place._id).startsWith('temp-')) {
+        await fetch(`${backend}/api/projects/${project._id}/places/${place._id}`, { method: 'DELETE' });
+      }
+    } catch (e) {
+      console.warn('Delete request failed:', e);
+    }
+    removeSecondary(index);
   }
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -1117,13 +1147,26 @@ function SecondaryCard({ place, index, projectId }) {
         <ImageDrop
           label="Upload 360° image for this place"
           previewUrl={place.virtualtour}
-          onUploaded={(url) => replaceSecondary(index, { virtualtour: url })}
+          onUploaded={(url) => replaceSecondary(index, { virtualtour: url, tourUrl: undefined })}
         />
       </div>
 
+      <label className="block mt-3 text-xs">Tour URL
+        <input type="url" className="w-full mt-1 rounded-lg border p-1" value={place.tourUrl || ''} onChange={(e) => replaceSecondary(index, { tourUrl: e.target.value, virtualtour: undefined })} />
+      </label>
+      {((!place.virtualtour && !place.tourUrl) || (place.virtualtour && place.tourUrl)) && (
+        <div className="mt-2 text-xs text-red-600">Provide either a 360 image or a tour URL</div>
+      )}
+
       <div className="flex gap-2 mt-3">
-        <button className="px-3 py-1 rounded-lg bg-emerald-600 text-white" onClick={() => setOpen360(true)} disabled={!place.virtualtour}>View 360°</button>
+        {place.virtualtour && (
+          <button className="px-3 py-1 rounded-lg bg-emerald-600 text-white" onClick={() => setOpen360(true)}>View 360°</button>
+        )}
+        {place.tourUrl && (
+          <a className="px-3 py-1 rounded-lg bg-emerald-600 text-white" href={place.tourUrl} target="_blank" rel="noopener noreferrer">Open Tour</a>
+        )}
         <button className="px-3 py-1 rounded-lg bg-indigo-600 text-white" onClick={onComputeRoute}>Route</button>
+        <button className="px-3 py-1 rounded-lg bg-red-600 text-white" onClick={onDelete}>Delete</button>
       </div>
 
       {(place.footerInfo?.distance || place.footerInfo?.time) && (
@@ -1157,13 +1200,22 @@ function SecondaryCard({ place, index, projectId }) {
 // Main Page
 
 export default function MappingStudio() {
-  const { project, updateProject, reorderSecondaries, backend, mapStyle } = useStudio();
+  const { project, updateProject, reorderSecondaries, backend } = useStudio();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
   async function onSave() {
+    const places = [project.principal, ...project.secondaries];
+    for (const p of places) {
+      const hasPano = !!p.virtualtour;
+      const hasTour = !!p.tourUrl;
+      if (hasPano === hasTour) {
+        alert(`Place "${p.name}" must have exactly one media: 360 image or tour URL`);
+        return;
+      }
+    }
     try {
       const saved = await saveProject(project);
       useStudio.getState().setProject(saved);
@@ -1184,10 +1236,10 @@ export default function MappingStudio() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [expOpts, setExpOpts] = useState({
-    mirrorImagesLocally: true,
+    inlineAssets: true,
     inlineData: true,
     includeLocalLibs: true,
-    styleURL: 'satellite',
+    styleURL: project.styleURL || '',
     profiles: ['driving'],
     includeRoutes: true
   });
@@ -1196,6 +1248,15 @@ export default function MappingStudio() {
     if (!project._id) {
       alert('Save project first');
       return;
+    }
+    const places = [project.principal, ...project.secondaries];
+    for (const p of places) {
+      const hasPano = !!p.virtualtour;
+      const hasTour = !!p.tourUrl;
+      if (hasPano === hasTour) {
+        alert(`Place "${p.name}" must have exactly one media: 360 image or tour URL`);
+        return;
+      }
     }
     setExporting(true);
     try {
@@ -1237,6 +1298,11 @@ export default function MappingStudio() {
               placeholder="Description"
               value={project.description || ''}
               onChange={(e) => updateProject({ description: e.target.value })} />
+            <input
+              className="text-sm text-gray-600 bg-transparent outline-none w-full"
+              placeholder="Map style URL (optional)"
+              value={project.styleURL || ''}
+              onChange={(e) => updateProject({ styleURL: e.target.value })} />
           </div>
             <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white" onClick={onSave}>Save</button>
             <button className="px-4 py-2 rounded-xl bg-gray-900 text-white" onClick={() => setExportOpen(true)}>Export</button>
@@ -1266,9 +1332,15 @@ export default function MappingStudio() {
               <ImageDrop
                 label="Upload principal 360° / hero image (optional)"
                 previewUrl={project.principal.virtualtour}
-                onUploaded={(url) => updateProject({ principal: { ...project.principal, virtualtour: url } })}
+                onUploaded={(url) => updateProject({ principal: { ...project.principal, virtualtour: url, tourUrl: undefined } })}
               />
             </div>
+            <label className="block mt-3 text-xs">Tour URL
+              <input type="url" className="w-full mt-1 rounded-lg border p-1" value={project.principal.tourUrl || ''} onChange={(e) => updateProject({ principal: { ...project.principal, tourUrl: e.target.value, virtualtour: undefined } })} />
+            </label>
+            {((!project.principal.virtualtour && !project.principal.tourUrl) || (project.principal.virtualtour && project.principal.tourUrl)) && (
+              <div className="mt-2 text-xs text-red-600">Provide either a 360 image or a tour URL</div>
+            )}
           </div>
 
           <div className="p-4 bg-white rounded-2xl border shadow-sm">
@@ -1306,12 +1378,12 @@ export default function MappingStudio() {
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
             <div className="bg-white p-4 rounded-xl w-80 space-y-2">
               <h3 className="font-semibold text-lg">Export Project</h3>
-              <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.mirrorImagesLocally} onChange={e=>setExpOpts({...expOpts, mirrorImagesLocally:e.target.checked})}/>Mirror images locally</label>
+              <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.inlineAssets} onChange={e=>setExpOpts({...expOpts, inlineAssets:e.target.checked})}/>Inline assets</label>
               <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.inlineData} onChange={e=>setExpOpts({...expOpts, inlineData:e.target.checked})}/>Inline data</label>
               <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.includeLocalLibs} onChange={e=>setExpOpts({...expOpts, includeLocalLibs:e.target.checked})}/>Include local libs</label>
               <label className="block text-sm"><input type="checkbox" className="mr-2" checked={expOpts.includeRoutes} onChange={e=>setExpOpts({...expOpts, includeRoutes:e.target.checked})}/>Include routes</label>
-              <label className="block text-sm">Map Style (Satellite by default)
-                <input className="w-full mt-1 rounded border p-1" value={expOpts.styleURL} onChange={e=>setExpOpts({...expOpts, styleURL:e.target.value})} placeholder="satellite"/>
+              <label className="block text-sm">Map Style URL (leave blank for satellite)
+                <input className="w-full mt-1 rounded border p-1" value={expOpts.styleURL} onChange={e=>setExpOpts({...expOpts, styleURL:e.target.value})} placeholder="https://example.com/style.json"/>
               </label>
               <div className="flex justify-end gap-2 pt-2">
                 <button className="px-3 py-1 rounded bg-gray-200" onClick={()=>setExportOpen(false)}>Cancel</button>

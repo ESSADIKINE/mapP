@@ -18,11 +18,11 @@ async function testExport() {
     const exportData = buildExportData(project, { inlineData: true });
     
     console.log('Export data built successfully');
-    console.log('Principal virtual tour:', exportData.principal.virtualtour);
+    console.log('Principal media:', exportData.principal.media);
     console.log('Secondary places:', exportData.secondaries.length);
-    
+
     exportData.secondaries.forEach((s, i) => {
-      console.log(`Secondary ${i + 1}:`, s.name, 'Virtual tour:', s.virtualtour);
+      console.log(`Secondary ${i + 1}:`, s.name, 'Media:', s.media);
     });
     
     console.log('✅ Export test completed successfully');
