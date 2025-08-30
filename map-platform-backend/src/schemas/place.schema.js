@@ -49,4 +49,3 @@ export const principalPlaceZ = basePlaceObject
 export const secondaryPlaceZ = basePlaceObject
   .extend({ category: z.literal('Secondary').optional() })
   .refine(mediaCheck, mediaRefinement);
-
