@@ -9,6 +9,10 @@ import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities';
 import { useDropzone } from 'react-dropzone';
 import { getRoute, formatKm, formatHhMm } from '@/lib/osrm';
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+const DEFAULT_MODEL_URL = 'https://modelviewer.dev/shared-assets/models/Astronaut.glb';
 
 // MapLibre needs window -> use dynamic import to avoid SSR issues
 const MapLibreGL = dynamic(() => import('maplibre-gl'), { ssr: false });
@@ -26,6 +30,8 @@ const ReactPannellum = dynamic(() => import('react-pannellum'), { ssr: false });
  *  longitude: number,
  *  virtualtour?: string,
  *  tourUrl?: string,
+ *  modelUrl?: string,
+ *  modelPosition?: { x: number, y: number, z: number },
 *  zoom?: number,
  *  bounds?: number[][],
  *  heading?: number,
@@ -72,6 +78,8 @@ const useStudio = create((set, get) => ({
   map: /** @type {import('maplibre-gl') | null} */ (null),
   mapInstance: /** @type {import('maplibre-gl').Map | null} */ (null),
   routeLayers: new Set(),
+  hoveredPlaceId: /** @type {string | null} */ (null),
+  selectedPlaceId: /** @type {string | null} */ (null),
 
   setProject: (p) => set({ project: p }),
   updateProject: (patch) => set({ project: { ...get().project, ...patch } }),
@@ -83,6 +91,8 @@ const useStudio = create((set, get) => ({
     console.log('Setting map instance:', m);
     set({ mapInstance: m });
   },
+  setHoveredPlace: (id) => set({ hoveredPlaceId: id }),
+  setSelectedPlace: (id) => set({ selectedPlaceId: id }),
   addSecondary: (place) => set({
     project: {
       ...get().project,
@@ -620,9 +630,10 @@ function Modal({ open, onClose, children, title }) {
 // Map Canvas
 
 function MapCanvas() {
-  const { map: maplibregl, setMapLib, mapInstance, setMapInstance, project, replaceSecondary } = useStudio();
+  const { map: maplibregl, setMapLib, mapInstance, setMapInstance, project, replaceSecondary, setHoveredPlace, setSelectedPlace } = useStudio();
   const mapRef = useRef(null);
   const [ready, setReady] = useState(false);
+  const [pendingModel, setPendingModel] = useState(null);
   const isMountedRef = useRef(true);
   const mapCreatedRef = useRef(false);
 
@@ -787,16 +798,49 @@ function MapCanvas() {
         setReady(true);
       }, 1000);
 
-      // Click to add secondary
+      // Add Three.js layer for 3D models
+      const addThreeLayer = () => {
+        if (m.__threeLayer) return;
+        const layer = {
+          id: 'three-models',
+          type: 'custom',
+          renderingMode: '3d',
+          onAdd(map, gl) {
+            this.camera = new THREE.Camera();
+            this.scene = new THREE.Scene();
+            this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
+            this.renderer.autoClear = false;
+          },
+          render(gl, matrix) {
+            const mtx = new THREE.Matrix4().fromArray(matrix);
+            this.camera.projectionMatrix = mtx;
+            this.renderer.state.reset();
+            this.renderer.render(this.scene, this.camera);
+            map.triggerRepaint();
+          }
+        };
+        m.addLayer(layer);
+        m.__threeLayer = layer;
+      };
+
+      m.on('style.load', addThreeLayer);
+
+      // Click to place a 3D model marker
       m.on('click', (e) => {
         const { lng, lat } = e.lngLat;
-        const name = `Place ${project.secondaries.length + 1}`;
-        useStudio.getState().addSecondary({
-          name,
-          latitude: lat,
-          longitude: lng,
-          category: 'Secondary',
-          footerInfo: { location: 'New' }
+        const id = `place-${Date.now()}`;
+        const layer = m.__threeLayer;
+        if (!layer) return;
+        const merc = maplibregl.MercatorCoordinate.fromLngLat([lng, lat], 0);
+        const scale = merc.meterInMercatorCoordinateUnits();
+        const loader = new GLTFLoader();
+        loader.load(DEFAULT_MODEL_URL, (gltf) => {
+          const model = gltf.scene;
+          model.userData.placeId = id;
+          model.position.set(merc.x, merc.y, merc.z);
+          model.scale.set(scale, scale, scale);
+          layer.scene.add(model);
+          setPendingModel({ id, lng, lat, model, base: merc, offset: { x: 0, y: 0, z: 0 } });
         });
       });
 
@@ -852,6 +896,94 @@ function MapCanvas() {
     }
   }, [maplibregl, mapInstance, project.styleURL, project.principal, project.secondaries.length, setMapInstance]);
 
+  // Handle hover/click interactions on 3D models
+  useEffect(() => {
+    if (!mapInstance || !mapInstance.__threeLayer) return;
+    const canvas = mapInstance.getCanvas();
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    const getIntersections = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, mapInstance.__threeLayer.camera);
+      return raycaster.intersectObjects(mapInstance.__threeLayer.scene.children, true);
+    };
+
+    const handleMove = (e) => {
+      const hits = getIntersections(e);
+      if (hits.length > 0) {
+        const placeId = hits[0].object.userData.placeId;
+        setHoveredPlace(placeId);
+        window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId } }));
+      } else {
+        setHoveredPlace(null);
+        window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId: null } }));
+      }
+    };
+
+    const handleLeave = () => {
+      setHoveredPlace(null);
+      window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId: null } }));
+    };
+
+    const handleClick = (e) => {
+      const hits = getIntersections(e);
+      if (hits.length > 0) {
+        const placeId = hits[0].object.userData.placeId;
+        setSelectedPlace(placeId);
+        window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'click', placeId } }));
+      }
+    };
+
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('mouseleave', handleLeave);
+    canvas.addEventListener('click', handleClick);
+    return () => {
+      canvas.removeEventListener('mousemove', handleMove);
+      canvas.removeEventListener('mouseleave', handleLeave);
+      canvas.removeEventListener('click', handleClick);
+    };
+  }, [mapInstance, setHoveredPlace, setSelectedPlace]);
+
+  const updateOffset = (axis, val) => {
+    setPendingModel((pm) => {
+      if (!pm) return pm;
+      const next = { ...pm, offset: { ...pm.offset, [axis]: val } };
+      const scale = pm.base.meterInMercatorCoordinateUnits();
+      pm.model.position.set(
+        pm.base.x + next.offset.x * scale,
+        pm.base.y + next.offset.y * scale,
+        pm.base.z + next.offset.z * scale
+      );
+      return next;
+    });
+  };
+
+  const cancelModel = () => {
+    if (pendingModel && mapInstance?.__threeLayer) {
+      mapInstance.__threeLayer.scene.remove(pendingModel.model);
+    }
+    setPendingModel(null);
+  };
+
+  const saveModel = () => {
+    if (!pendingModel) return;
+    const name = `Place ${useStudio.getState().project.secondaries.length + 1}`;
+    useStudio.getState().addSecondary({
+      _id: pendingModel.id,
+      name,
+      latitude: pendingModel.lat,
+      longitude: pendingModel.lng,
+      category: 'Secondary',
+      footerInfo: { location: 'New' },
+      modelUrl: DEFAULT_MODEL_URL,
+      modelPosition: pendingModel.offset
+    });
+    setPendingModel(null);
+  };
+
   // draw markers & routes on updates
   useEffect(() => {
     if (!mapInstance || !maplibregl) return;
@@ -861,6 +993,13 @@ function MapCanvas() {
       if (!mapInstance.__markers) mapInstance.__markers = [];
       mapInstance.__markers.forEach((mk) => mk.remove());
       mapInstance.__markers = [];
+
+      // Clean previous 3D models
+      if (mapInstance.__threeLayer) {
+        if (!mapInstance.__models) mapInstance.__models = [];
+        mapInstance.__models.forEach((obj) => mapInstance.__threeLayer.scene.remove(obj));
+        mapInstance.__models = [];
+      }
 
       // Principal marker
       const p = project.principal;
@@ -872,19 +1011,50 @@ function MapCanvas() {
         mapInstance.__markers.push(pm);
       }
 
-      // Secondary markers
+      // Secondary markers / models
       project.secondaries.forEach((s, idx) => {
         if (!isFinite(s.longitude) || !isFinite(s.latitude)) return;
-        const mk = new maplibregl.Marker({ color: '#2563eb' })
-          .setLngLat([s.longitude, s.latitude])
-          .setPopup(new maplibregl.Popup().setHTML(`
-            <div class="text-sm">
-              <b>${s.name}</b><br/>${prettyLatLng(s.latitude, s.longitude)}<br/>
-              ${s.footerInfo?.distance ? `Distance: ${s.footerInfo.distance}<br/>` : ''}
-              ${s.footerInfo?.time ? `Time: ${s.footerInfo.time}` : ''}
-            </div>`))
-          .addTo(mapInstance);
-        mapInstance.__markers.push(mk);
+        if (s.modelUrl && mapInstance.__threeLayer) {
+          const loader = new GLTFLoader();
+          loader.load(s.modelUrl, (gltf) => {
+            const model = gltf.scene;
+            model.userData.placeId = s._id;
+            const merc = maplibregl.MercatorCoordinate.fromLngLat([s.longitude, s.latitude], s.modelPosition?.z || 0);
+            const scale = merc.meterInMercatorCoordinateUnits();
+            model.position.set(
+              merc.x + (s.modelPosition?.x || 0) * scale,
+              merc.y + (s.modelPosition?.y || 0) * scale,
+              merc.z + (s.modelPosition?.z || 0) * scale
+            );
+            model.scale.set(scale, scale, scale);
+            mapInstance.__threeLayer.scene.add(model);
+            mapInstance.__models.push(model);
+          });
+        } else {
+          const mk = new maplibregl.Marker({ color: '#2563eb' })
+            .setLngLat([s.longitude, s.latitude])
+            .setPopup(new maplibregl.Popup().setHTML(`
+              <div class="text-sm">
+                <b>${s.name}</b><br/>${prettyLatLng(s.latitude, s.longitude)}<br/>
+                ${s.footerInfo?.distance ? `Distance: ${s.footerInfo.distance}<br/>` : ''}
+                ${s.footerInfo?.time ? `Time: ${s.footerInfo.time}` : ''}
+              </div>`))
+            .addTo(mapInstance);
+          const el = mk.getElement();
+          el.addEventListener('mouseenter', () => {
+            setHoveredPlace(s._id);
+            window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId: s._id } }));
+          });
+          el.addEventListener('mouseleave', () => {
+            setHoveredPlace(null);
+            window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId: null } }));
+          });
+          el.addEventListener('click', () => {
+            setSelectedPlace(s._id);
+            window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'click', placeId: s._id } }));
+          });
+          mapInstance.__markers.push(mk);
+        }
       });
 
       // Routes: remove existing layers/sources (ensure layers removed before sources)
@@ -1007,6 +1177,29 @@ function MapCanvas() {
             <div className="text-2xl mb-2">🗺️</div>
             <p className="text-gray-600">Map loaded but canvas not visible</p>
             <p className="text-xs text-gray-500 mt-1">Check console for debugging info</p>
+          </div>
+        </div>
+      )}
+
+      {pendingModel && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/30">
+          <div className="bg-white p-4 rounded-xl shadow space-y-2">
+            <div className="font-semibold">Adjust model position</div>
+            <div className="flex gap-2">
+              <label className="text-sm">X
+                <input type="number" value={pendingModel.offset.x} onChange={(e) => updateOffset('x', Number(e.target.value))} className="border p-1 w-20 ml-1" />
+              </label>
+              <label className="text-sm">Y
+                <input type="number" value={pendingModel.offset.y} onChange={(e) => updateOffset('y', Number(e.target.value))} className="border p-1 w-20 ml-1" />
+              </label>
+              <label className="text-sm">Z
+                <input type="number" value={pendingModel.offset.z} onChange={(e) => updateOffset('z', Number(e.target.value))} className="border p-1 w-20 ml-1" />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button className="px-3 py-1 bg-gray-200 rounded" onClick={cancelModel}>Cancel</button>
+              <button className="px-3 py-1 bg-blue-600 text-white rounded" onClick={saveModel}>Save</button>
+            </div>
           </div>
         </div>
       )}
