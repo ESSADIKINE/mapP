@@ -15,8 +15,6 @@ import projectRoutes from './routes/project.routes.js';
 import placeRoutes from './routes/place.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import routeRoutes from './routes/route.routes.js';
-import path from 'path';
-import fs from 'fs';
 
 const app = express();
 
