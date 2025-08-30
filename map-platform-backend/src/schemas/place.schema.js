@@ -53,4 +53,3 @@ export const secondaryPlaceZ = basePlaceObject
 // Partial schemas useful for updates where fields are optional
 export const principalPlacePartialZ = principalPlaceZ.partial();
 export const secondaryPlacePartialZ = secondaryPlaceZ.partial();
-
