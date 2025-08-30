@@ -40,16 +40,28 @@ const mediaCheck = (p) => {
   return (hasPano || hasTour) && !(hasPano && hasTour);
 };
 
+// Create extended schemas first
+const principalPlaceObject = basePlaceObject.extend({ 
+  category: z.literal('Principal').optional() 
+});
+
+const secondaryPlaceObject = basePlaceObject.extend({ 
+  category: z.literal('Secondary').optional() 
+});
+
+// Create partial versions before applying refine
+const basePlacePartialObject = basePlaceObject.partial();
+const principalPlacePartialObject = principalPlaceObject.partial();
+const secondaryPlacePartialObject = secondaryPlaceObject.partial();
+
+// Apply refine validation to the base schemas
 export const basePlaceZ = basePlaceObject.refine(mediaCheck, mediaRefinement);
 
-export const principalPlaceZ = basePlaceObject
-  .extend({ category: z.literal('Principal').optional() })
-  .refine(mediaCheck, mediaRefinement);
+export const principalPlaceZ = principalPlaceObject.refine(mediaCheck, mediaRefinement);
 
-export const secondaryPlaceZ = basePlaceObject
-  .extend({ category: z.literal('Secondary').optional() })
-  .refine(mediaCheck, mediaRefinement);
+export const secondaryPlaceZ = secondaryPlaceObject.refine(mediaCheck, mediaRefinement);
 
-// Partial schemas useful for updates where fields are optional
-export const principalPlacePartialZ = principalPlaceZ.partial();
-export const secondaryPlacePartialZ = secondaryPlaceZ.partial();
+// Export partial schemas (without refine validation since updates might be partial)
+export const basePlacePartialZ = basePlacePartialObject;
+export const principalPlacePartialZ = principalPlacePartialObject;
+export const secondaryPlacePartialZ = secondaryPlacePartialObject;
