@@ -29,6 +29,7 @@
   const routeToggle = document.getElementById('routeToggle');
   const backBtn = document.getElementById('backBtn');
   const TOUR_WHITELIST = ['my.matterport.com','kuula.co','youzvirtualtour.com'];
+
   const logoEl = document.getElementById('logo');
 
   if (logoEl) {
