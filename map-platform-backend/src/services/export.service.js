@@ -24,7 +24,18 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
     zoom: doc.principal.zoom != null ? Number(doc.principal.zoom) : null,
     bounds: doc.principal.bounds || null,
     category: 'Principal',
-    virtualtour: doc.principal.virtualtour || '',
+    media: doc.principal.virtualtour
+      ? { type: 'panorama', panoramaUrl: doc.principal.virtualtour }
+      : { type: 'tour', tourUrl: doc.principal.tourUrl },
+    model3d: doc.principal.model3d
+      ? {
+          url: doc.principal.model3d.url,
+          useAsMarker: !!doc.principal.model3d.useAsMarker,
+          scale: doc.principal.model3d.scale ?? 1,
+          rotation: doc.principal.model3d.rotation || [0, 0, 0],
+          altitude: doc.principal.model3d.altitude ?? 0
+        }
+      : null,
     gallery: [],
     footerInfo: { location: doc.principal.footerInfo?.location || null }
   };
@@ -34,6 +45,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
     if (s.routesFromBase && s.routesFromBase.length) {
       s.routesFromBase.forEach((poly, idx) => {
         const coords = decodePolyline(poly);
+        if (coords.length < 2) return;
         routes.push({
           profile: profiles[idx] || profiles[0] || 'driving',
           distance_m: s.footerInfo?.distance ? parseInt(s.footerInfo.distance.replace(/\D/g, '')) : null,
@@ -48,7 +60,18 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
       category: s.category,
       lat: Number(s.latitude),
       lon: Number(s.longitude),
-      virtualtour: s.virtualtour || null,
+      media: s.virtualtour
+        ? { type: 'panorama', panoramaUrl: s.virtualtour }
+        : { type: 'tour', tourUrl: s.tourUrl },
+      model3d: s.model3d
+        ? {
+            url: s.model3d.url,
+            useAsMarker: !!s.model3d.useAsMarker,
+            scale: s.model3d.scale ?? 1,
+            rotation: s.model3d.rotation || [0, 0, 0],
+            altitude: s.model3d.altitude ?? 0
+          }
+        : null,
       gallery: [],
       footerInfo: {
         location: s.footerInfo?.location || null,
@@ -64,7 +87,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
       id: String(doc._id),
       title: doc.title,
       description: doc.description || '',
-      styleURL: styleURL || 'satellite',
+      styleURL: doc.styleURL || styleURL || 'satellite',
       logo: doc.logoUrl ? { src: doc.logoUrl, alt: 'Logo' } : null,
       units: 'metric'
     },
@@ -78,14 +101,17 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
 /**
  * Export a project as a static bundle and stream it as a ZIP file.
  * @param {string} projectId
- * @param {{ inlineData?: boolean, includeLocalLibs?: boolean, mirrorImagesLocally?: boolean, styleURL?: string, profiles?: string[] }} options
+ * @param {{ inlineData?: boolean, includeLocalLibs?: boolean, inlineAssets?: boolean, styleURL?: string, profiles?: string[] }} options
+ *  inlineData defaults to true to embed project data and avoid file:// CORS issues.
  * @param {import('express').Response} res
  */
 export async function exportProject(projectId, options, res) {
-  const { inlineData = false, includeLocalLibs = true, mirrorImagesLocally = true } = options || {};
+  const { inlineData = true, includeLocalLibs = true, inlineAssets = true } = options || {};
 
   const doc = await Project.findById(projectId).lean();
   const data = buildExportData(doc, options);
+  const hasModels =
+    !!data.principal.model3d || data.secondaries.some((s) => s.model3d);
 
   // temp dir
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'export-'));
@@ -94,20 +120,53 @@ export async function exportProject(projectId, options, res) {
   await fs.promises.mkdir(path.join(assetsDir, 'js'), { recursive: true });
   await fs.promises.mkdir(path.join(assetsDir, 'css'), { recursive: true });
   await fs.promises.mkdir(imagesDir, { recursive: true });
+  const modelsDir = path.join(assetsDir, 'models');
+  if (hasModels) await fs.promises.mkdir(modelsDir, { recursive: true });
 
-  // logo asset handling
+  // logo asset handling with optional retina variant
   if (data.project.logo?.src) {
-    if (mirrorImagesLocally) {
+    if (inlineAssets) {
       try {
         const url = data.project.logo.src;
         const ext = path.extname(new URL(url).pathname) || '.png';
         const dest = path.join(imagesDir, `logo${ext}`);
         await download(url, dest);
         data.project.logo.src = `./images/logo${ext}`;
+        try {
+          const retinaUrl = url.replace(ext, `@2x${ext}`);
+          const retinaDest = path.join(imagesDir, `logo@2x${ext}`);
+          await download(retinaUrl, retinaDest);
+          data.project.logo.srcset = `${data.project.logo.src} 1x, ./images/logo@2x${ext} 2x`;
+        } catch {
+          data.project.logo.srcset = `${data.project.logo.src} 1x`;
+        }
       } catch {
         // keep remote URL on failure
+        data.project.logo.srcset = `${data.project.logo.src} 1x`;
       }
+    } else {
+      data.project.logo.srcset = `${data.project.logo.src} 1x`;
     }
+  }
+
+  // model asset handling
+  if (hasModels && inlineAssets) {
+    const processPlace = async (p) => {
+      if (p.model3d?.url) {
+        try {
+          const url = p.model3d.url;
+          const ext = path.extname(new URL(url).pathname) || '.glb';
+          const destName = `${slugify(p.id || p.name)}${ext}`;
+          const dest = path.join(modelsDir, destName);
+          await download(url, dest);
+          p.model3d.url = `./assets/models/${destName}`;
+        } catch {
+          // keep remote URL if download fails
+        }
+      }
+    };
+    await processPlace(data.principal);
+    for (const s of data.secondaries) await processPlace(s);
   }
 
   // panorama asset handling - keep Cloudinary URLs for 360° images
@@ -126,7 +185,7 @@ export async function exportProject(projectId, options, res) {
   // local libs (MapLibre + Pannellum) when available; else we’ll fall back to CDN
   let libsAvailable = false;
   let libsDir = path.join(tmpDir, 'libs');
-  if (includeLocalLibs) {
+  if (inlineAssets && includeLocalLibs) {
     try {
       const mljs = path.resolve('node_modules/maplibre-gl/dist/maplibre-gl.js');
       const mlcss = path.resolve('node_modules/maplibre-gl/dist/maplibre-gl.css');
@@ -165,18 +224,50 @@ export async function exportProject(projectId, options, res) {
     .pannellum-container .pnlm-controls { z-index: 1000; }
   </style>`;
 
-  const libScripts = libsAvailable
+  let libScripts = libsAvailable
     ? `<script src="./libs/maplibre-gl.js"></script>
-  <script src="./libs/pannellum.js"></script>`
+  <script>window.PANNELLUM_SRC='./libs/pannellum.js';</script>`
     : `<script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>`;
+  <script>window.PANNELLUM_SRC='https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js';</script>`;
+
+  if (hasModels) {
+    if (inlineAssets && includeLocalLibs) {
+      try {
+        const threeJs = path.resolve('node_modules/three/build/three.min.js');
+        const gltfLoader = path.resolve('node_modules/three/examples/js/loaders/GLTFLoader.js');
+        const dracoLoader = path.resolve('node_modules/three/examples/js/loaders/DRACOLoader.js');
+        const dracoDirSrc = path.resolve('node_modules/three/examples/js/libs/draco');
+        const hasAll = [threeJs, gltfLoader, dracoLoader].every((p) => fs.existsSync(p));
+        if (hasAll && fs.existsSync(dracoDirSrc)) {
+          await fs.promises.copyFile(threeJs, path.join(libsDir, 'three.min.js'));
+          await fs.promises.copyFile(gltfLoader, path.join(libsDir, 'GLTFLoader.js'));
+          await fs.promises.copyFile(dracoLoader, path.join(libsDir, 'DRACOLoader.js'));
+          const dracoDest = path.join(libsDir, 'draco');
+          await fs.promises.mkdir(dracoDest, { recursive: true });
+          for (const f of await fs.promises.readdir(dracoDirSrc)) {
+            await fs.promises.copyFile(path.join(dracoDirSrc, f), path.join(dracoDest, f));
+          }
+          libScripts += `\n<script>window.THREE_SRC='./libs'; window.DRACO_DECODER_PATH='./libs/draco/';</script>`;
+        } else {
+          libScripts += `\n<script>window.THREE_SRC='https://unpkg.com/three@0.155.0'; window.DRACO_DECODER_PATH='https://unpkg.com/three@0.155.0/examples/js/libs/draco/';</script>`;
+        }
+      } catch {
+        libScripts += `\n<script>window.THREE_SRC='https://unpkg.com/three@0.155.0'; window.DRACO_DECODER_PATH='https://unpkg.com/three@0.155.0/examples/js/libs/draco/';</script>`;
+      }
+    } else {
+      libScripts += `\n<script>window.THREE_SRC='https://unpkg.com/three@0.155.0'; window.DRACO_DECODER_PATH='https://unpkg.com/three@0.155.0/examples/js/libs/draco/';</script>`;
+    }
+  }
 
   const inlineDataStr = inlineData
     ? `<script>window.__PROJECT__ = ${JSON.stringify(data)};</script>`
     : '';
 
+  const srcsetAttr = data.project.logo?.srcset
+    ? ` srcset="${data.project.logo.srcset}"`
+    : '';
   const logoHtml = data.project.logo?.src
-    ? `<img src="${data.project.logo.src}" alt="${data.project.title}" class="logo-img" /> <span class="logo-text">${data.project.title}</span>`
+    ? `<img src="${data.project.logo.src}"${srcsetAttr} alt="${data.project.title}" class="logo-img" />`
     : `<span class="logo-text">${data.project.title}</span>`;
 
   const html = mapTpl
