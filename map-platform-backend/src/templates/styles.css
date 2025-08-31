@@ -289,14 +289,267 @@ body {
 
 /* Secondary places sidebar */
 .secondary-sidebar {
-  width: 320px;
-  background: rgba(255,255,255,0.95);
-  backdrop-filter: blur(10px);
-  border-left: 1px solid rgba(0,0,0,0.1);
+  width: 380px;
+  background: rgba(255,255,255,0.98);
+  backdrop-filter: blur(20px);
+  border-left: 1px solid rgba(0,0,0,0.08);
+  box-shadow: -5px 0 25px rgba(0,0,0,0.1);
   overflow-y: auto;
   z-index: 100;
   display: flex;
   flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+.secondary-sidebar:hover {
+  box-shadow: -8px 0 30px rgba(0,0,0,0.15);
+}
+
+.secondary-list {
+  list-style: none;
+  padding: 20px;
+  margin: 0;
+}
+
+.secondary-list li {
+  background: white;
+  border-radius: 12px;
+  margin-bottom: 15px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  border: 1px solid rgba(0,0,0,0.05);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.secondary-list li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.secondary-list li h4 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.secondary-list li p {
+  margin: 5px 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.details-view {
+  padding: 20px;
+  flex: 1;
+}
+
+.details-back {
+  background: #f3f4f6;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+}
+
+.details-back:hover {
+  background: #e5e7eb;
+}
+
+.details-view h3 {
+  margin: 0 0 15px 0;
+  font-size: 20px;
+  color: #1f2937;
+}
+
+.coords {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.coords span {
+  font-family: monospace;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+#copyCoordsBtn {
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pano-small {
+  width: 100%;
+  height: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 15px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+}
+
+.media-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 10px;
+}
+
+.pano-btn {
+  background: #10b981;
+  color: white;
+}
+
+.pano-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.tour-btn {
+  background: #3b82f6;
+  color: white;
+}
+
+.tour-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.info-meta {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.route-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.route-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #10b981;
+}
+
+/* Modal Styles */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.modal.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 90vw;
+  height: 85vh;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 10;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.modal-body {
+  width: 100%;
+  height: 100%;
+}
+
+#tourIframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.pannellum-container {
+  width: 100%;
+  height: 100%;
+}
+
+.pannellum-container canvas {
+  border-radius: 0 !important;
+}
+
+/* Hidden utility class */
+.hidden {
+  display: none !important;
 }
 
 .secondary-list {

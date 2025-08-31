@@ -359,23 +359,20 @@
       viewer.destroy();
       viewer = null;
     }
+    
+    // Create media preview with modal buttons
     if (project.media?.type === 'panorama' && project.media.panoramaUrl) {
-      try{
-        await ensurePannellum();
-        if(!detailsView.classList.contains('hidden')){
-          viewer = pannellum.viewer('detailMedia', {
-            type: 'equirectangular',
-            panorama: project.media.panoramaUrl,
-            crossOrigin: 'anonymous',
-            autoLoad: true,
-            showControls: true,
-            hfov: 100
-          });
-          viewer.on('load', () => viewer.resize());
-        }
-      }catch{}
+      const panoBtn = document.createElement('button');
+      panoBtn.textContent = 'View 360° Panorama';
+      panoBtn.className = 'media-btn pano-btn';
+      panoBtn.onclick = () => openPanoModal(project.media.panoramaUrl, project.name);
+      detailMedia.appendChild(panoBtn);
     } else if (project.media?.type === 'tour' && project.media.tourUrl) {
-      renderTour(project.media.tourUrl);
+      const tourBtn = document.createElement('button');
+      tourBtn.textContent = 'Open Virtual Tour';
+      tourBtn.className = 'media-btn tour-btn';
+      tourBtn.onclick = () => openTourModal(project.media.tourUrl, project.name);
+      detailMedia.appendChild(tourBtn);
     }
     routeToggle.checked = false;
     if (sticky) {
@@ -482,6 +479,58 @@
   function goHome() { showHome(); }
   function toggleMenu() { alert('Menu'); }
 
+  // Modal functions
+  function openTourModal(url, title) {
+    const modal = document.getElementById('tourModal');
+    const iframe = document.getElementById('tourIframe');
+    const modalTitle = document.getElementById('tourModalTitle');
+    
+    iframe.src = url;
+    modalTitle.textContent = title || 'Virtual Tour';
+    modal.classList.remove('hidden');
+  }
+
+  function closeTourModal() {
+    const modal = document.getElementById('tourModal');
+    const iframe = document.getElementById('tourIframe');
+    
+    iframe.src = '';
+    modal.classList.add('hidden');
+  }
+
+  function openPanoModal(url, title) {
+    const modal = document.getElementById('panoModal');
+    const container = document.getElementById('panoContainer');
+    const modalTitle = document.getElementById('panoModalTitle');
+    
+    modalTitle.textContent = title || '360° View';
+    modal.classList.remove('hidden');
+    
+    // Initialize Pannellum
+    ensurePannellum().then(() => {
+      if (viewer && viewer.destroy) {
+        viewer.destroy();
+      }
+      viewer = pannellum.viewer(container, {
+        type: 'equirectangular',
+        panorama: url,
+        autoLoad: true,
+        showControls: true,
+        showFullscreenCtrl: true,
+        showZoomCtrl: true
+      });
+    });
+  }
+
+  function closePanoModal() {
+    const modal = document.getElementById('panoModal');
+    if (viewer && viewer.destroy) {
+      viewer.destroy();
+      viewer = null;
+    }
+    modal.classList.add('hidden');
+  }
+
   backBtn.addEventListener('click', () => { stickyProject = null; closeDetails(); });
   routeToggle.addEventListener('change', (e) => {
     if (e.target.checked) showRoute(); else hideRoute();
@@ -523,6 +572,10 @@
   window.showProjects = showProjects;
   window.goHome = goHome;
   window.toggleMenu = toggleMenu;
+  window.openTourModal = openTourModal;
+  window.closeTourModal = closeTourModal;
+  window.openPanoModal = openPanoModal;
+  window.closePanoModal = closePanoModal;
   window.addEventListener('beforeunload',()=>{
     if(viewer && viewer.destroy){viewer.destroy();}
     if(threeRenderer && threeRenderer.dispose){

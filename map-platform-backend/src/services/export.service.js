@@ -120,7 +120,7 @@ export async function exportProject(projectId, options, res) {
   await fs.promises.mkdir(path.join(assetsDir, 'js'), { recursive: true });
   await fs.promises.mkdir(path.join(assetsDir, 'css'), { recursive: true });
   await fs.promises.mkdir(imagesDir, { recursive: true });
-  const modelsDir = path.join(assetsDir, 'models');
+  const modelsDir = path.join(tmpDir, 'models');
   if (hasModels) await fs.promises.mkdir(modelsDir, { recursive: true });
 
   // logo asset handling with optional retina variant
@@ -159,7 +159,7 @@ export async function exportProject(projectId, options, res) {
           const destName = `${slugify(p.id || p.name)}${ext}`;
           const dest = path.join(modelsDir, destName);
           await download(url, dest);
-          p.model3d.url = `./assets/models/${destName}`;
+          p.model3d.url = `./models/${destName}`;
         } catch {
           // keep remote URL if download fails
         }

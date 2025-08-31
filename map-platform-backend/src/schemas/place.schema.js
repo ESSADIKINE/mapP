@@ -21,7 +21,7 @@ const basePlaceObject = z.object({
   model3d: z
     .object({
       // Accept absolute URLs or relative paths like "./uploads/model.glb"
-      url: z.string().min(1),
+      url: z.string().min(1).optional(),
       useAsMarker: z.boolean().optional(),
       scale: z.number().optional(),
       rotation: z.array(z.number()).length(3).optional(),
@@ -45,7 +45,8 @@ const mediaRefinement = {
 const mediaCheck = (p) => {
   const hasPano = !!p.virtualtour;
   const hasTour = !!p.tourUrl;
-  return (hasPano || hasTour) && !(hasPano && hasTour);
+  // Allow places without media for now (they can be added later)
+  return !(hasPano && hasTour); // Only prevent having both
 };
 
 // Create extended schemas first

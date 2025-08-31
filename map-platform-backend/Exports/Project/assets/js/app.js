@@ -507,8 +507,8 @@
     if(e.key==='Escape'){
       if(previewProject){
         cancelPreview();
-      }else if(!detailsView.classList.contains('hidden')){
-        stickyProject=null;
+      } else if(!detailsView.classList.contains('hidden')){
+        stickyProject = null;
         closeDetails();
       }
     }

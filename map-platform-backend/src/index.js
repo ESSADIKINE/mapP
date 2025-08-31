@@ -41,6 +41,7 @@ app.get('/health', (req, res) => res.json({ ok: true, time: new Date().toISOStri
 
 // Static file serving for 3D models
 app.use('/uploads_3D', express.static(path.join(__dirname, '../uploads_3D')));
+app.use('/uploads', express.static(path.join(__dirname, '../Uploads')));
 
 // Routes
 app.use('/api/projects', projectRoutes);
@@ -48,14 +49,7 @@ app.use('/api/projects/:projectId/places', placeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/route', routeRoutes);
 
-// Serve uploaded 3D models
-const uploadsDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-app.use('/uploads', express.static(uploadsDir));
-// backward compatibility for previous `/uploads_3D` paths
-app.use('/uploads_3D', express.static(uploadsDir));
+
 
 // Errors
 // eslint-disable-next-line no-unused-vars

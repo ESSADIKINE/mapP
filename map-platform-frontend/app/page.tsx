@@ -1116,14 +1116,19 @@ function MapCanvas() {
             model.position.set(
               merc.x + offset.x * scale,
               merc.y + offset.y * scale,
-              merc.z + offset.z * scale
+              merc.z + (offset.z || 10) * scale  // Raise the model above ground
             );
 
-            model.scale.set(scale, scale, scale);
+            // Use a larger scale to make the model more visible
+            const modelScale = scale * 100; // Make it 100x larger
+            model.scale.set(modelScale, modelScale, modelScale);
             model.rotation.y = Math.PI;
 
             layer.scene.add(model);
             console.log('3D model added to scene for:', place.name);
+            console.log('Model position:', model.position);
+            console.log('Model scale:', model.scale);
+            console.log('Mercator coordinates:', merc);
           },
           undefined,
           (error) => {
@@ -1185,11 +1190,14 @@ function MapCanvas() {
             model.position.set(
               merc.x + (s.modelPosition?.x || 0) * scale,
               merc.y + (s.modelPosition?.y || 0) * scale,
-              merc.z + (s.modelPosition?.z || 0) * scale
+              merc.z + (s.modelPosition?.z || 10) * scale  // Raise the model above ground
             );
-            model.scale.set(scale, scale, scale);
+            // Use a larger scale to make the model more visible
+            const modelScale = scale * 100; // Make it 100x larger
+            model.scale.set(modelScale, modelScale, modelScale);
             mapInstance.__threeLayer.scene.add(model);
             mapInstance.__models.push(model);
+            console.log('Secondary 3D model added:', s.name, 'Position:', model.position, 'Scale:', model.scale);
           });
         } else {
           const mk = new maplibregl.Marker({ color: '#2563eb' })
