@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Model Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #container { width: 100%; height: 400px; border: 1px solid #ccc; }
+        #log { margin-top: 20px; padding: 10px; background: #f5f5f5; height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>3D Model Loading Test</h1>
+    <div id="container"></div>
+    <div id="log"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/loaders/DRACOLoader.js"></script>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML += message + '<br>';
+            console.log(message);
+        }
+
+        // Test model URL
+        const modelUrl = './models/68b481962342d613c92574ef.glb';
+        
+        log('Starting 3D model test...');
+        log('Model URL: ' + modelUrl);
+        
+        // Check if Three.js is loaded
+        if (typeof THREE === 'undefined') {
+            log('ERROR: Three.js not loaded!');
+        } else {
+            log('✅ Three.js loaded successfully');
+            log('THREE version: ' + THREE.REVISION);
+            
+            if (typeof THREE.GLTFLoader === 'undefined') {
+                log('ERROR: GLTFLoader not loaded!');
+            } else {
+                log('✅ GLTFLoader loaded successfully');
+            }
+        }
+
+        // Try to load the model
+        if (typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined') {
+            const loader = new THREE.GLTFLoader();
+            
+            log('Attempting to load model...');
+            
+            loader.load(
+                modelUrl,
+                function (gltf) {
+                    log('✅ Model loaded successfully!');
+                    log('Model scene: ' + gltf.scene);
+                    log('Model animations: ' + gltf.animations.length);
+                    log('Model cameras: ' + gltf.cameras.length);
+                    log('Model asset: ' + gltf.asset);
+                },
+                function (progress) {
+                    const percent = (progress.loaded / progress.total * 100).toFixed(1);
+                    log('Loading progress: ' + percent + '%');
+                },
+                function (error) {
+                    log('❌ Error loading model: ' + error.message);
+                    log('Error details: ' + JSON.stringify(error));
+                }
+            );
+        }
+    </script>
+</body>
+</html>

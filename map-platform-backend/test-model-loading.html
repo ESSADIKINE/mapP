@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Model Loading Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #container { width: 100%; height: 400px; border: 1px solid #ccc; }
+        #log { margin-top: 20px; padding: 10px; background: #f5f5f5; height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>3D Model Loading Test</h1>
+    <div id="container"></div>
+    <div id="log"></div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + message + '<br>';
+            console.log(message);
+        }
+
+        // Test data
+        const testData = {
+            principal: {
+                name: 'Test Place',
+                lon: -74.0060,
+                lat: 40.7128,
+                model3d: {
+                    url: 'https://threejs.org/examples/models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf',
+                    useAsMarker: true,
+                    scale: 1.0,
+                    rotation: [0, 0, 0],
+                    altitude: 0
+                }
+            }
+        };
+
+        log('Starting 3D model loading test...');
+
+        // Load Three.js
+        async function loadThreeJS() {
+            try {
+                log('Loading Three.js...');
+                await loadScript('https://unpkg.com/three@0.155.0/build/three.min.js');
+                await loadScript('https://unpkg.com/three@0.155.0/examples/js/loaders/GLTFLoader.js');
+                log('Three.js loaded successfully');
+                return true;
+            } catch (error) {
+                log('Error loading Three.js: ' + error.message);
+                return false;
+            }
+        }
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        function loadModel(place) {
+            if (!place.model3d || !place.model3d.url || !window.THREE) {
+                log('Model loading skipped - missing requirements');
+                return;
+            }
+
+            log('Loading model: ' + place.model3d.url);
+            
+            const loader = new THREE.GLTFLoader();
+            loader.load(
+                place.model3d.url,
+                (gltf) => {
+                    log('Model loaded successfully!');
+                    log('Scene objects: ' + gltf.scene.children.length);
+                },
+                (progress) => {
+                    const percent = (progress.loaded / progress.total * 100).toFixed(1);
+                    log('Loading progress: ' + percent + '%');
+                },
+                (error) => {
+                    log('Error loading model: ' + error.message);
+                }
+            );
+        }
+
+        // Run test
+        loadThreeJS().then(success => {
+            if (success) {
+                loadModel(testData.principal);
+            }
+        });
+    </script>
+</body>
+</html>

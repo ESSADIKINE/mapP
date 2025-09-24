@@ -59,18 +59,42 @@
   }
 
   async function ensureThree(){
-    if(window.THREE && window.THREE.GLTFLoader && window.THREE.DRACOLoader) return window.THREE;
-    const base=window.THREE_SRC||'https://unpkg.com/three@0.155.0';
-    if(base.startsWith('http')){
-      await loadScript(`${base}/build/three.min.js`);
-      await loadScript(`${base}/examples/js/loaders/GLTFLoader.js`);
-      await loadScript(`${base}/examples/js/loaders/DRACOLoader.js`);
-    }else{
-      await loadScript(`${base}/three.min.js`);
-      await loadScript(`${base}/GLTFLoader.js`);
-      await loadScript(`${base}/DRACOLoader.js`);
+    console.log('Ensuring Three.js is loaded...');
+    if(window.THREE && window.THREE.GLTFLoader && window.THREE.DRACOLoader) {
+      console.log('Three.js already loaded');
+      return window.THREE;
     }
-    return window.THREE;
+    
+    const base=window.THREE_SRC||'https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js';
+    console.log('Loading Three.js from:', base);
+    
+    try {
+      if(base.startsWith('http')){
+        console.log('Loading from CDN...');
+        // Load Three.js directly from CDN
+        await loadScript(base);
+        // Load loaders from the same CDN
+        const baseUrl = base.replace('/build/three.min.js', '');
+        await loadScript(`${baseUrl}/examples/js/loaders/GLTFLoader.js`);
+        await loadScript(`${baseUrl}/examples/js/loaders/DRACOLoader.js`);
+      }else{
+        console.log('Loading from local files...');
+        await loadScript(`${base}/three.min.js`);
+        await loadScript(`${base}/GLTFLoader.js`);
+        await loadScript(`${base}/DRACOLoader.js`);
+      }
+      
+      if(window.THREE && window.THREE.GLTFLoader) {
+        console.log('Three.js loaded successfully');
+        return window.THREE;
+      } else {
+        console.error('Three.js failed to load properly');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error loading Three.js:', error);
+      return null;
+    }
   }
 
   function getSecondaryById(id) {
@@ -93,38 +117,93 @@
   }
 
   function loadModel(place) {
-    if (!place.model3d || !place.model3d.url || !window.THREE) return;
+    if (!place.model3d || !place.model3d.url || !window.THREE) {
+      console.log('Model loading skipped for:', place.name, '- model3d:', !!place.model3d, 'url:', place.model3d?.url, 'THREE:', !!window.THREE);
+      return;
+    }
+    
+    // Validate URL format
+    let modelUrl = place.model3d.url;
+    if (!modelUrl.startsWith('http') && !modelUrl.startsWith('./') && !modelUrl.startsWith('models/')) {
+      modelUrl = `models/${modelUrl}`;
+      console.log('Fixed model URL for', place.name, ':', modelUrl);
+    }
+    
+    console.log('Loading 3D model for:', place.name, 'URL:', modelUrl);
+    console.log('Place coordinates:', place.lon, place.lat);
+    console.log('Model settings:', place.model3d);
+    
     const loader = new THREE.GLTFLoader();
     if (THREE.DRACOLoader) {
       const dracoLoader = new THREE.DRACOLoader();
       if (window.DRACO_DECODER_PATH) dracoLoader.setDecoderPath(window.DRACO_DECODER_PATH);
       loader.setDRACOLoader(dracoLoader);
     }
-    loader.load(place.model3d.url, (gltf) => {
-      const scene = gltf.scene;
-      const mc = maplibregl.MercatorCoordinate.fromLngLat([place.lon, place.lat], place.model3d.altitude || 0);
-      const scale = mc.meterInMercatorCoordinateUnits() * (place.model3d.scale || 1);
-      scene.scale.set(scale, scale, scale);
-      const rot = place.model3d.rotation || [0, 0, 0];
-      scene.rotation.set(
-        THREE.MathUtils.degToRad(rot[0] || 0),
-        THREE.MathUtils.degToRad(rot[1] || 0),
-        THREE.MathUtils.degToRad(rot[2] || 0)
-      );
-      scene.position.set(mc.x, mc.y, mc.z);
-      scene.userData.placeId = place.id || place._id || place.name;
-      scene.updateMatrix();
-      scene.matrixAutoUpdate = false;
-      threeScene.add(scene);
-      modelMeshes.push(scene);
-      place._model = scene;
-    });
+    
+    loader.load(
+      modelUrl, 
+      (gltf) => {
+        console.log('3D model loaded successfully for:', place.name);
+        const scene = gltf.scene;
+        
+        // Calculate position in Mercator coordinates
+        const mc = maplibregl.MercatorCoordinate.fromLngLat([place.lon, place.lat], place.model3d.altitude || 0);
+        console.log('Mercator coordinates for', place.name, ':', mc.x, mc.y, mc.z);
+        
+        // Set scale
+        const scale = mc.meterInMercatorCoordinateUnits() * (place.model3d.scale || 1);
+        scene.scale.set(scale, scale, scale);
+        console.log('Model scale for', place.name, ':', scale);
+        
+        // Set rotation
+        const rot = place.model3d.rotation || [0, 0, 0];
+        scene.rotation.set(
+          THREE.MathUtils.degToRad(rot[0] || 0),
+          THREE.MathUtils.degToRad(rot[1] || 0),
+          THREE.MathUtils.degToRad(rot[2] || 0)
+        );
+        console.log('Model rotation for', place.name, ':', rot);
+        
+        // Set position
+        scene.position.set(mc.x, mc.y, mc.z);
+        console.log('Model position set for', place.name, ':', mc.x, mc.y, mc.z);
+        
+        // Store place ID for interaction
+        scene.userData.placeId = place.id || place._id || place.name;
+        
+        // Update matrix and disable auto-update for performance
+        scene.updateMatrix();
+        scene.matrixAutoUpdate = false;
+        
+        // Add to scene
+        threeScene.add(scene);
+        modelMeshes.push(scene);
+        place._model = scene;
+        
+        console.log('3D model added to scene for:', place.name);
+        console.log('Total models in scene:', modelMeshes.length);
+      },
+      (progress) => {
+        console.log('Loading progress for', place.name, ':', (progress.loaded / progress.total * 100).toFixed(1) + '%');
+      },
+      (error) => {
+        console.error('Error loading 3D model for', place.name, ':', error);
+        console.error('Model URL was:', modelUrl);
+        console.error('Full error details:', error);
+      }
+    );
   }
 
   function setupModels() {
-    if (!window.THREE) return;
+    console.log('Setting up 3D models...');
+    if (!window.THREE) {
+      console.error('Three.js not available for model setup');
+      return;
+    }
+    
+    console.log('Creating Three.js scene and renderer...');
     threeScene = new THREE.Scene();
-    threeCamera = new THREE.Camera();
+    threeCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     threeRenderer = new THREE.WebGLRenderer({
       canvas: map.getCanvas(),
       context: map.painter.context.gl,
@@ -138,7 +217,9 @@
       id: 'three-models',
       type: 'custom',
       renderingMode: '3d',
-      onAdd: function () {},
+      onAdd: function () {
+        console.log('Three.js custom layer added');
+      },
       render: function (gl, matrix) {
         const m = new THREE.Matrix4().fromArray(matrix);
         threeCamera.projectionMatrix = m;
@@ -148,18 +229,34 @@
       }
     };
     map.addLayer(customLayer);
+    console.log('Three.js custom layer added to map');
 
+    // Add some lighting to make models visible
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    threeScene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(0, 1, 0);
+    threeScene.add(directionalLight);
+    console.log('Lighting added to Three.js scene');
+
+    console.log('Loading models for principal place...');
     loadModel(data.principal);
-    data.secondaries.forEach(loadModel);
+    
+    console.log('Loading models for secondary places...');
+    data.secondaries.forEach((place, index) => {
+      console.log(`Loading model ${index + 1}/${data.secondaries.length} for:`, place.name);
+      loadModel(place);
+    });
 
     const canvas = map.getCanvas();
     canvas.addEventListener('mousemove', (e) => handlePointer(e, 'move'));
     canvas.addEventListener('click', (e) => handlePointer(e, 'click'));
     canvas.addEventListener('mouseleave', () => handlePointer(null, 'leave'));
+    console.log('3D model setup complete');
   }
 
   function handlePointer(e, type) {
-    if (!raycaster || !mouse) return;
+    if (!raycaster || !mouse || !threeCamera) return;
     if (type === 'leave') {
       if (hoveredModel) {
         window.dispatchEvent(new CustomEvent('glb-marker', { detail: { type: 'leave', placeId: hoveredModel } }));
@@ -170,27 +267,32 @@
     const rect = map.getCanvas().getBoundingClientRect();
     mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(mouse, threeCamera);
-    const hits = raycaster.intersectObjects(modelMeshes, true);
-    if (hits.length) {
-      let obj = hits[0].object;
-      while (obj && !obj.userData.placeId) obj = obj.parent;
-      if (!obj) return;
-      const placeId = obj.userData.placeId;
-      if (type === 'move') {
-        if (hoveredModel !== placeId) {
-          if (hoveredModel) {
-            window.dispatchEvent(new CustomEvent('glb-marker', { detail: { type: 'leave', placeId: hoveredModel } }));
+    
+    try {
+      raycaster.setFromCamera(mouse, threeCamera);
+      const hits = raycaster.intersectObjects(modelMeshes, true);
+      if (hits.length) {
+        let obj = hits[0].object;
+        while (obj && !obj.userData.placeId) obj = obj.parent;
+        if (!obj) return;
+        const placeId = obj.userData.placeId;
+        if (type === 'move') {
+          if (hoveredModel !== placeId) {
+            if (hoveredModel) {
+              window.dispatchEvent(new CustomEvent('glb-marker', { detail: { type: 'leave', placeId: hoveredModel } }));
+            }
+            hoveredModel = placeId;
+            window.dispatchEvent(new CustomEvent('glb-marker', { detail: { type: 'hover', placeId } }));
           }
-          hoveredModel = placeId;
-          window.dispatchEvent(new CustomEvent('glb-marker', { detail: { type: 'hover', placeId } }));
+        } else if (type === 'click') {
+          window.dispatchEvent(new CustomEvent('glb-marker', { detail: { type: 'click', placeId } }));
         }
-      } else if (type === 'click') {
-        window.dispatchEvent(new CustomEvent('glb-marker', { detail: { type: 'click', placeId } }));
+      } else if (type === 'move' && hoveredModel) {
+        window.dispatchEvent(new CustomEvent('glb-marker', { detail: { type: 'leave', placeId: hoveredModel } }));
+        hoveredModel = null;
       }
-    } else if (type === 'move' && hoveredModel) {
-      window.dispatchEvent(new CustomEvent('glb-marker', { detail: { type: 'leave', placeId: hoveredModel } }));
-      hoveredModel = null;
+    } catch (error) {
+      console.error('Error in handlePointer:', error);
     }
   }
 
@@ -237,13 +339,27 @@
           .setLngLat([data.principal.lon, data.principal.lat])
           .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
           .addTo(map);
+        console.log('Added marker for principal place:', data.principal.name);
+      } else if (data.principal.model3d && data.principal.model3d.useAsMarker) {
+        console.log('Skipping marker for principal place - using 3D model as marker');
       }
 
       populateSecondaries();
       const hasModels = data.principal.model3d || data.secondaries.some((s) => s.model3d);
+      console.log('Project has 3D models:', hasModels);
+      console.log('Principal model3d:', data.principal.model3d);
+      console.log('Secondary models:', data.secondaries.map(s => ({ name: s.name, model3d: s.model3d })));
+      
       if (hasModels) {
-        await ensureThree();
-        setupModels();
+        console.log('Initializing 3D models...');
+        const three = await ensureThree();
+        if (three) {
+          setupModels();
+        } else {
+          console.error('Failed to load Three.js, 3D models will not be displayed');
+        }
+      } else {
+        console.log('No 3D models found in project data');
       }
     });
 
@@ -267,9 +383,14 @@
     data.secondaries.forEach((s) => {
       if (!isFinite(s.lon) || !isFinite(s.lat)) return;
       let marker = null;
+      
+      // Only show marker if no 3D model OR if 3D model is not used as marker
       if (!s.model3d || !s.model3d.useAsMarker) {
         marker = new maplibregl.Marker({ color: '#2563eb' }).setLngLat([s.lon, s.lat]).addTo(map);
         s._marker = marker;
+        console.log('Added marker for:', s.name, '- model3d:', s.model3d);
+      } else {
+        console.log('Skipping marker for:', s.name, '- using 3D model as marker');
       }
 
       const li = document.createElement('li');

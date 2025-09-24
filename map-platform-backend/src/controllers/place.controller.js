@@ -35,3 +35,27 @@ export const deletePlace = async (req, res) => {
   await project.save();
   res.json({ ok: true });
 };
+
+// Update 3D model for a place
+export const updatePlaceModel3D = async (req, res) => {
+  const { projectId, placeId } = req.params;
+  const { model3d } = req.body;
+  
+  const project = await Project.findById(projectId);
+  if (!project) return res.status(404).json({ error: 'NotFound' });
+
+  // Check if it's the principal place
+  if (placeId === 'principal') {
+    project.principal.model3d = model3d;
+    await project.save();
+    return res.json(project.principal);
+  }
+
+  // Check if it's a secondary place
+  const idx = project.secondaries.findIndex(p => p._id.toString() === placeId);
+  if (idx === -1) return res.status(404).json({ error: 'PlaceNotFound' });
+
+  project.secondaries[idx].model3d = model3d;
+  await project.save();
+  res.json(project.secondaries[idx]);
+};
