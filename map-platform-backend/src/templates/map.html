@@ -18,6 +18,10 @@
         <li><a href="#" class="active" onclick="showHome()">Home</a></li>
         <li><a href="#" onclick="showAbout()">About Us</a></li>
         <li><a href="#" onclick="showProjects()">Projects</a></li>
+        <li class="dropdown" id="placesMenu">
+          <button id="placesMenuButton" class="dropdown-toggle" type="button">Places ▾</button>
+          <ul id="placesDropdown" class="dropdown-menu"></ul>
+        </li>
       </ul>
     </nav>
     <div class="header-icons">
@@ -49,6 +53,13 @@
           <span id="detailDistance"></span>
           <span id="detailTime"></span>
         </div>
+        <div id="detailPlaceType" class="detail-badge hidden"></div>
+        <div id="detailDescription" class="detail-description hidden"></div>
+        <div class="detail-contact-group">
+          <div id="detailAddress" class="detail-contact hidden"></div>
+          <div id="detailPhone" class="detail-contact hidden"></div>
+        </div>
+        <div id="detailLinks" class="detail-links"></div>
         <label class="route-toggle"><input type="checkbox" id="routeToggle"> Show route</label>
       </div>
     </aside>

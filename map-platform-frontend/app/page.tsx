@@ -39,8 +39,13 @@ const ReactPannellum = dynamic(() => import('react-pannellum'), { ssr: false });
  *  longitude: number,
  *  virtualtour?: string,
  *  tourUrl?: string,
+ *  googleMapsUrl?: string,
  *  logoUrl?: string,
-*  zoom?: number,
+ *  address?: string,
+ *  phone?: string,
+ *  description?: string,
+ *  placeType?: string,
+ *  zoom?: number,
  *  bounds?: number[][],
  *  heading?: number,
  *  category: 'Principal' | 'Secondary' | 'Other',
@@ -76,6 +81,11 @@ const useStudio = create((set, get) => ({
       latitude: 33.529234683566955,
       longitude: -7.685066910530196,
       category: 'Principal',
+      googleMapsUrl: '',
+      address: '',
+      phone: '',
+      description: '',
+      placeType: '',
       zoom: 16.4,
       heading: 0,
       footerInfo: { location: 'Oulfa' }
@@ -106,6 +116,11 @@ const useStudio = create((set, get) => ({
       ...get().project,
       secondaries: [...get().project.secondaries, {
         ...place,
+        googleMapsUrl: place.googleMapsUrl || '',
+        placeType: place.placeType || '',
+        address: place.address || '',
+        phone: place.phone || '',
+        description: place.description || '',
         _id: place._id || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       }]
     }
@@ -196,12 +211,18 @@ async function upload3DModel(file) {
 function sanitizeProject(project) {
   const cleanPlace = (p) => {
     const { modelUrl, modelPath, model3d, modelPosition, ...rest } = p;
-    return {
+    const cleaned = {
       ...rest,
       virtualtour: p.virtualtour || undefined,
       tourUrl: p.tourUrl || undefined,
-      logoUrl: p.logoUrl || undefined
+      logoUrl: p.logoUrl || undefined,
+      googleMapsUrl: p.googleMapsUrl || undefined,
+      address: p.address?.trim() || undefined,
+      phone: p.phone?.trim() || undefined,
+      description: p.description?.trim() || undefined,
+      placeType: p.placeType?.trim() || undefined
     };
+    return cleaned;
   };
 
   return {
@@ -906,6 +927,10 @@ function MapCanvas() {
       latitude: pendingModel.lat,
       longitude: pendingModel.lng,
       category: 'Secondary',
+      placeType: '',
+      address: '',
+      phone: '',
+      description: '',
       footerInfo: { location: 'New' },
       modelUrl: pendingModel.modelUrl || DEFAULT_MODEL_URL,
       modelPath: pendingModel.modelPath,
@@ -1411,7 +1436,12 @@ function SecondaryCard({ place, index, projectId }) {
           zoom: refreshedPlace.zoom || undefined,
           bounds: refreshedPlace.bounds || undefined,
           footerInfo: refreshedPlace.footerInfo || undefined,
-          logoUrl: refreshedPlace.logoUrl || undefined
+          logoUrl: refreshedPlace.logoUrl || undefined,
+          googleMapsUrl: refreshedPlace.googleMapsUrl || undefined,
+          placeType: refreshedPlace.placeType || undefined,
+          address: refreshedPlace.address || undefined,
+          phone: refreshedPlace.phone || undefined,
+          description: refreshedPlace.description || undefined
         };
         const res = await fetch(`${backend}/api/projects/${pid}/places`, {
           method: 'POST',
@@ -1496,6 +1526,14 @@ function SecondaryCard({ place, index, projectId }) {
         />
         <span className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700">Secondary</span>
       </div>
+      <label className="block mt-2 text-xs">Place Type
+        <input
+          type="text"
+          className="w-full mt-1 rounded-lg border p-1"
+          value={place.placeType || ''}
+          onChange={(e) => replaceSecondary(index, { placeType: e.target.value })}
+        />
+      </label>
       <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-600">
         <label className="col-span-1">Lat
           <input type="number" className="w-full mt-1 rounded-lg border p-1"
@@ -1519,6 +1557,14 @@ function SecondaryCard({ place, index, projectId }) {
 
       <label className="block mt-3 text-xs">Tour URL
         <input type="url" className="w-full mt-1 rounded-lg border p-1" value={place.tourUrl || ''} onChange={(e) => replaceSecondary(index, { tourUrl: e.target.value, virtualtour: undefined })} />
+      </label>
+      <label className="block mt-3 text-xs">Google Maps Link
+        <input
+          type="url"
+          className="w-full mt-1 rounded-lg border p-1"
+          value={place.googleMapsUrl || ''}
+          onChange={(e) => replaceSecondary(index, { googleMapsUrl: e.target.value })}
+        />
       </label>
       {((!place.virtualtour && !place.tourUrl) || (place.virtualtour && place.tourUrl)) && (
         <div className="mt-2 text-xs text-red-600">Provide either a 360 image or a tour URL</div>
@@ -1715,6 +1761,37 @@ export default function MappingStudio() {
                 onUploaded={(url) => updateProject({ principal: { ...project.principal, virtualtour: url, tourUrl: undefined } })}
               />
             </div>
+            <label className="block mt-3 text-xs">Place Type
+              <input
+                type="text"
+                className="w-full mt-1 rounded-lg border p-1"
+                value={project.principal.placeType || ''}
+                onChange={(e) => updateProject({ principal: { ...project.principal, placeType: e.target.value } })}
+              />
+            </label>
+            <label className="block mt-3 text-xs">Address
+              <input
+                type="text"
+                className="w-full mt-1 rounded-lg border p-1"
+                value={project.principal.address || ''}
+                onChange={(e) => updateProject({ principal: { ...project.principal, address: e.target.value } })}
+              />
+            </label>
+            <label className="block mt-3 text-xs">Phone
+              <input
+                type="tel"
+                className="w-full mt-1 rounded-lg border p-1"
+                value={project.principal.phone || ''}
+                onChange={(e) => updateProject({ principal: { ...project.principal, phone: e.target.value } })}
+              />
+            </label>
+            <label className="block mt-3 text-xs">Description
+              <textarea
+                className="w-full mt-1 rounded-lg border p-2 h-24 resize-none"
+                value={project.principal.description || ''}
+                onChange={(e) => updateProject({ principal: { ...project.principal, description: e.target.value } })}
+              />
+            </label>
             <div className="mt-3">
               <ImageDrop
                 label="Upload principal logo (optional)"
@@ -1722,6 +1799,14 @@ export default function MappingStudio() {
                 onUploaded={(url) => updateProject({ principal: { ...project.principal, logoUrl: url } })}
               />
             </div>
+            <label className="block mt-3 text-xs">Google Maps Link
+              <input
+                type="url"
+                className="w-full mt-1 rounded-lg border p-1"
+                value={project.principal.googleMapsUrl || ''}
+                onChange={(e) => updateProject({ principal: { ...project.principal, googleMapsUrl: e.target.value } })}
+              />
+            </label>
             <label className="block mt-3 text-xs">Tour URL
               <input type="url" className="w-full mt-1 rounded-lg border p-1" value={project.principal.tourUrl || ''} onChange={(e) => updateProject({ principal: { ...project.principal, tourUrl: e.target.value, virtualtour: undefined } })} />
             </label>
@@ -1735,7 +1820,17 @@ export default function MappingStudio() {
               <h2 className="font-semibold">Secondary Places</h2>
               <button
                 className="px-3 py-1 rounded-lg bg-emerald-600 text-white"
-                onClick={() => useStudio.getState().addSecondary({ name: `Place ${project.secondaries.length + 1}`, latitude: project.principal.latitude, longitude: project.principal.longitude, category: 'Secondary', footerInfo: { location: 'Near' } })}
+                onClick={() => useStudio.getState().addSecondary({
+                  name: `Place ${project.secondaries.length + 1}`,
+                  latitude: project.principal.latitude,
+                  longitude: project.principal.longitude,
+                  category: 'Secondary',
+                  placeType: '',
+                  address: '',
+                  phone: '',
+                  description: '',
+                  footerInfo: { location: 'Near' }
+                })}
               >Add</button>
             </div>
 
