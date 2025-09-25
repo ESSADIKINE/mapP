@@ -7,6 +7,11 @@
       "latitude": 28.555784441511065,
       "longitude": 77.08697067257833,
       "virtualtour": "https://res.cloudinary.com/your-cloud/image/upload/residence_360.jpg",
+      "googleMapsUrl": "https://maps.google.com/?q=Residence",
+      "address": "123 Ocean View Blvd, Casablanca",
+      "phone": "+212 522-000000",
+      "description": "An elegant seaside residence featuring panoramic Atlantic views and curated interiors.",
+      "placeType": "Luxury Residence",
       "zoom": 16.418970858853267,
       "bounds": [
         [77.09080236565859, 28.559189067210696],
@@ -22,6 +27,8 @@
         "latitude": 28.555784441511065,
         "longitude": 77.08697067257833,
         "virtualtour": "https://res.cloudinary.com/your-cloud/image/upload/mosque_360.jpg",
+        "googleMapsUrl": "https://maps.google.com/?q=Mosque",
+        "placeType": "Cultural Site",
         "zoom": 16.418970858853267,
         "bounds": [
           [77.09080236565859, 28.559189067210696],
@@ -33,4 +40,3 @@
       }
     ]
   }
-  

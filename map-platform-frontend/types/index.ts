@@ -20,9 +20,14 @@ export interface Place {
   longitude: number
   virtualtour?: string
   tourUrl?: string
+  googleMapsUrl?: string
   zoom?: number
   bounds?: [number, number][]
   heading?: number
+  address?: string
+  phone?: string
+  description?: string
+  placeType?: string
   category: 'Principal' | 'Secondary' | 'Other'
   routesFromBase?: string[]
   modelUrl?: string
