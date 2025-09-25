@@ -5,7 +5,8 @@
   let map;
   let currentProject = null;
   let routeLayerId = null;
-  let viewer = null;
+  let inlineViewer = null;
+  let modalViewer = null;
   let stickyProject = null;
   let previewProject = null;
   let threeScene = null;
@@ -26,10 +27,22 @@
   const detailMedia = document.getElementById('detailMedia');
   const detailDistance = document.getElementById('detailDistance');
   const detailTime = document.getElementById('detailTime');
+  const detailLinks = document.getElementById('detailLinks');
+  const detailPlaceType = document.getElementById('detailPlaceType');
+  const detailDescription = document.getElementById('detailDescription');
+  const detailAddress = document.getElementById('detailAddress');
+  const detailPhone = document.getElementById('detailPhone');
   const routeToggle = document.getElementById('routeToggle');
   const backBtn = document.getElementById('backBtn');
   const TOUR_WHITELIST = ['my.matterport.com','kuula.co','youzvirtualtour.com'];
   const logoEl = document.getElementById('logo');
+  const placesMenu = document.getElementById('placesMenu');
+  const placesButton = document.getElementById('placesMenuButton');
+  const placesDropdown = document.getElementById('placesDropdown');
+  let placesDropdownOpen = false;
+
+  if (detailAddress) detailAddress.classList.add('detail-contact--address');
+  if (detailPhone) detailPhone.classList.add('detail-contact--phone');
 
   if (logoEl) {
     logoEl.addEventListener('click', () => {
@@ -39,6 +52,86 @@
         map.flyTo({ center: [lon, lat], zoom: zoom || map.getZoom() });
       }
     });
+  }
+
+  function closePlacesDropdown() {
+    if (!placesMenu || !placesDropdownOpen) return;
+    placesMenu.classList.remove('open');
+    placesDropdownOpen = false;
+  }
+
+  function openPlacesDropdown() {
+    if (!placesMenu || placesDropdownOpen) return;
+    placesMenu.classList.add('open');
+    placesDropdownOpen = true;
+  }
+
+  function togglePlacesDropdown() {
+    if (placesDropdownOpen) closePlacesDropdown();
+    else openPlacesDropdown();
+  }
+
+  if (placesButton) {
+    placesButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      togglePlacesDropdown();
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!placesMenu) return;
+    if (placesMenu.contains(event.target)) return;
+    closePlacesDropdown();
+  });
+
+  const HTML_ESCAPE_LOOKUP = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+
+  function escapeHtml(value) {
+    if (value == null) return '';
+    return String(value).replace(/[&<>"']/g, (match) => HTML_ESCAPE_LOOKUP[match] || match);
+  }
+
+  function formatTelHref(phone) {
+    if (!phone) return '';
+    const trimmed = phone.trim();
+    if (!trimmed) return '';
+    const normalized = trimmed.replace(/[^+\d]/g, '');
+    if (!normalized) return '';
+    return normalized;
+  }
+
+  function buildPrincipalPopupHtml(place = {}) {
+    const title = escapeHtml(place.name || 'Principal place');
+    const typeLine = place.placeType ? `<div class="principal-popup__subtitle">${escapeHtml(place.placeType)}</div>` : '';
+    const description = place.description
+      ? `<p class="principal-popup__description">${escapeHtml(place.description)}</p>`
+      : '';
+    const address = place.address
+      ? `<div class="principal-popup__meta-item"><span class="principal-popup__icon">📍</span><span>${escapeHtml(place.address)}</span></div>`
+      : '';
+    const phone = place.phone
+      ? `<div class="principal-popup__meta-item"><span class="principal-popup__icon">☎️</span><a href="tel:${formatTelHref(place.phone)}">${escapeHtml(place.phone)}</a></div>`
+      : '';
+    const meta = address || phone ? `<div class="principal-popup__meta">${address}${phone}</div>` : '';
+    const mapsButton = place.googleMapsUrl
+      ? `<a class="principal-popup__cta" href="${escapeHtml(place.googleMapsUrl)}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>`
+      : '';
+    return `
+      <div class="principal-popup__wrap">
+        <div class="principal-popup__title">${title}</div>
+        ${typeLine}
+        ${description}
+        ${meta}
+        ${mapsButton}
+      </div>
+    `;
   }
 
   function loadScript(src){
@@ -115,6 +208,53 @@
     });
     return out;
   }
+
+  function focusPlaceOnMap(place) {
+    if (!map || !place) return;
+    if (!isFinite(place.lon) || !isFinite(place.lat)) return;
+    const zoom = isFinite(place.zoom) ? Math.min(place.zoom, 18) : Math.min(data.principal.zoom || 15, 18);
+    map.flyTo({ center: [place.lon, place.lat], zoom, duration: 1000 });
+  }
+
+  function renderPlacesDropdown() {
+    if (!placesDropdown) return;
+    placesDropdown.innerHTML = '';
+    const places = (data.secondaries || []).filter((s) => isFinite(s.lon) && isFinite(s.lat));
+    if (!places.length) {
+      const empty = document.createElement('li');
+      const span = document.createElement('span');
+      span.className = 'dropdown-empty';
+      span.textContent = 'No secondary places yet';
+      empty.appendChild(span);
+      placesDropdown.appendChild(empty);
+      return;
+    }
+
+    places.forEach((place) => {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = place.name || 'Unnamed place';
+      btn.addEventListener('click', () => {
+        closePlacesDropdown();
+        focusPlaceOnMap(place);
+        openDetails(place, true);
+      });
+      li.appendChild(btn);
+      placesDropdown.appendChild(li);
+    });
+  }
+
+  function openPlaceMedia(place) {
+    if (!place || !place.media) return;
+    if (place.media.type === 'panorama' && place.media.panoramaUrl) {
+      openPanoModal(place.media.panoramaUrl, place.name);
+    } else if (place.media.type === 'tour' && place.media.tourUrl) {
+      openTourModal(place.media.tourUrl, place.name);
+    }
+  }
+
+  renderPlacesDropdown();
 
   function loadModel(place) {
     if (!place.model3d || !place.model3d.url || !window.THREE) {
@@ -313,7 +453,7 @@
               }
             },
             layers: [
-              { id: 'satellite-layer', type: 'raster', source: 'satellite', minzoom: 0, maxzoom: 20 }
+              { id: 'satellite-layer', type: 'raster', source: 'satellite', minzoom: 0, maxzoom: 22 }
             ]
           };
 
@@ -321,7 +461,8 @@
       container: 'map',
       style,
       center: [data.principal.lon, data.principal.lat],
-      zoom: data.principal.zoom || 13
+      zoom: data.principal.zoom || 13,
+      maxZoom: typeof data.project?.maxZoom === 'number' ? data.project.maxZoom : 22
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
@@ -329,6 +470,14 @@
 
     map.on('load', async () => {
       if (loadingEl) loadingEl.style.display = 'none';
+
+      const desiredMaxZoom = typeof data.principal?.maxZoom === 'number'
+        ? data.principal.maxZoom
+        : map.getMaxZoom();
+      const clampedZoom = Math.min(desiredMaxZoom, map.getMaxZoom());
+      if (map.getZoom() < clampedZoom) {
+        map.setZoom(clampedZoom);
+      }
 
       if (isFinite(data.principal.lon) && isFinite(data.principal.lat)) {
         let principalEl = null;
@@ -348,9 +497,66 @@
         const pm = principalEl
           ? new maplibregl.Marker({ element: principalEl, anchor: 'bottom' })
           : new maplibregl.Marker({ color: '#111827' });
-        pm.setLngLat([data.principal.lon, data.principal.lat])
-          .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
-          .addTo(map);
+        pm.setLngLat([data.principal.lon, data.principal.lat]).addTo(map);
+
+        const principalPopup = new maplibregl.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          className: 'principal-popup',
+          offset: 32
+        }).setHTML(buildPrincipalPopupHtml(data.principal));
+
+        let principalMarkerHover = false;
+        let principalPopupHover = false;
+
+        const showPrincipalPopup = () => {
+          principalPopup.setLngLat([data.principal.lon, data.principal.lat]).addTo(map);
+        };
+
+        const hidePrincipalPopup = () => {
+          setTimeout(() => {
+            if (!principalMarkerHover && !principalPopupHover) {
+              principalPopup.remove();
+              principalPopupHover = false;
+            }
+          }, 120);
+        };
+
+        principalPopup.on('open', () => {
+          const popupEl = principalPopup.getElement();
+          if (!popupEl) return;
+          popupEl.addEventListener('mouseenter', () => {
+            principalPopupHover = true;
+          });
+          popupEl.addEventListener('mouseleave', () => {
+            principalPopupHover = false;
+            hidePrincipalPopup();
+          });
+        });
+
+        const principalMarkerEl = pm.getElement();
+        if (principalMarkerEl) {
+          principalMarkerEl.style.cursor = 'pointer';
+          principalMarkerEl.tabIndex = 0;
+          const handleEnter = () => {
+            principalMarkerHover = true;
+            showPrincipalPopup();
+          };
+          const handleLeave = () => {
+            principalMarkerHover = false;
+            hidePrincipalPopup();
+          };
+          principalMarkerEl.addEventListener('mouseenter', handleEnter);
+          principalMarkerEl.addEventListener('mouseleave', handleLeave);
+          principalMarkerEl.addEventListener('focus', handleEnter);
+          principalMarkerEl.addEventListener('blur', handleLeave);
+          principalMarkerEl.addEventListener('click', () => {
+            closePlacesDropdown();
+            showPrincipalPopup();
+            openPlaceMedia(data.principal);
+            openDetails(data.principal, true);
+          });
+        }
         console.log('Added marker for principal place:', data.principal.name, 'with logo:', !!data.principal.logoUrl);
       }
 
@@ -374,6 +580,7 @@
 
   function populateSecondaries() {
     listEl.innerHTML = '';
+    renderPlacesDropdown();
     data.secondaries.forEach((s) => {
       if (!isFinite(s.lon) || !isFinite(s.lat)) return;
       let marker = null;
@@ -404,11 +611,13 @@
       li.className = 'secondary-item';
       li.tabIndex = 0;
       li.setAttribute('role','button');
-      li.innerHTML = `<span>${s.name}</span>` +
-        (s.category ? ` <span class="badge">${s.category}</span>` : '') +
-        (s.footerInfo?.distanceText ? ` <span class="badge">${s.footerInfo.distanceText}</span>` : '') +
-        (s.footerInfo?.timeText ? ` <span class="badge">${s.footerInfo.timeText}</span>` : '') +
-        (s.model3d ? ` <span class="badge">3D</span>` : '');
+      const badges = [];
+      if (s.category) badges.push(`<span class="badge">${escapeHtml(s.category)}</span>`);
+      if (s.placeType) badges.push(`<span class="badge badge-muted">${escapeHtml(s.placeType)}</span>`);
+      if (s.footerInfo?.distanceText) badges.push(`<span class="badge">${escapeHtml(s.footerInfo.distanceText)}</span>`);
+      if (s.footerInfo?.timeText) badges.push(`<span class="badge">${escapeHtml(s.footerInfo.timeText)}</span>`);
+      if (s.model3d) badges.push('<span class="badge">3D</span>');
+      li.innerHTML = `<span>${escapeHtml(s.name || 'Unnamed place')}</span>` + (badges.length ? ` ${badges.join(' ')}` : '');
       s._li = li;
 
       const open = () => openDetails(s, true);
@@ -427,19 +636,29 @@
       li.addEventListener('mouseleave', () => marker && marker.getElement().classList.remove('marker-highlight'));
       listEl.appendChild(li);
       if (marker) {
-        marker.getElement().addEventListener('mouseenter', () => showPreview(s));
-        marker.getElement().addEventListener('mouseleave', () => cancelPreview());
-        marker.getElement().addEventListener('click', open);
+        const markerEl = marker.getElement();
+        markerEl.style.cursor = 'pointer';
+        markerEl.addEventListener('mouseenter', () => showPreview(s));
+        markerEl.addEventListener('mouseleave', () => cancelPreview());
+        markerEl.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          closePlacesDropdown();
+          openPlaceMedia(s);
+          open();
+        });
       }
     });
   }
   function renderTour(url){
+    detailMedia.classList.remove('is-empty');
     let allowed=false;
     try{
       const host=new URL(url).hostname.replace(/^www\./,'');
       allowed=TOUR_WHITELIST.includes(host);
     }catch{}
     if(!allowed){
+      detailMedia.classList.add('is-empty');
       const a=document.createElement('a');
       a.href=url;
       a.target='_blank';
@@ -458,6 +677,7 @@
     const showFallback=()=>{
       if(loaded) return;
       detailMedia.innerHTML='';
+      detailMedia.classList.add('is-empty');
       const a=document.createElement('a');
       a.href=url;
       a.target='_blank';
@@ -482,25 +702,105 @@
     copyBtn.onclick = () => navigator.clipboard.writeText(coordsText);
     detailDistance.textContent = project.footerInfo?.distanceText || '';
     detailTime.textContent = project.footerInfo?.timeText || '';
-    detailMedia.innerHTML = '';
-    if (viewer && viewer.destroy) {
-      viewer.destroy();
-      viewer = null;
+    if (detailPlaceType) {
+      if (project.placeType) {
+        detailPlaceType.textContent = project.placeType;
+        detailPlaceType.classList.remove('hidden');
+      } else {
+        detailPlaceType.textContent = '';
+        detailPlaceType.classList.add('hidden');
+      }
     }
-    
-    // Create media preview with modal buttons
-    if (project.media?.type === 'panorama' && project.media.panoramaUrl) {
-      const panoBtn = document.createElement('button');
-      panoBtn.textContent = 'View 360° Panorama';
-      panoBtn.className = 'media-btn pano-btn';
-      panoBtn.onclick = () => openPanoModal(project.media.panoramaUrl, project.name);
-      detailMedia.appendChild(panoBtn);
-    } else if (project.media?.type === 'tour' && project.media.tourUrl) {
-      const tourBtn = document.createElement('button');
-      tourBtn.textContent = 'Open Virtual Tour';
-      tourBtn.className = 'media-btn tour-btn';
-      tourBtn.onclick = () => openTourModal(project.media.tourUrl, project.name);
-      detailMedia.appendChild(tourBtn);
+    if (detailDescription) {
+      if (project.description) {
+        detailDescription.textContent = project.description;
+        detailDescription.classList.remove('hidden');
+      } else {
+        detailDescription.textContent = '';
+        detailDescription.classList.add('hidden');
+      }
+    }
+    if (detailAddress) {
+      if (project.address) {
+        detailAddress.textContent = project.address;
+        detailAddress.classList.remove('hidden');
+      } else {
+        detailAddress.textContent = '';
+        detailAddress.classList.add('hidden');
+      }
+    }
+    if (detailPhone) {
+      if (project.phone) {
+        const href = formatTelHref(project.phone);
+        if (href) {
+          detailPhone.innerHTML = `<a href="tel:${href}">${escapeHtml(project.phone)}</a>`;
+        } else {
+          detailPhone.textContent = project.phone;
+        }
+        detailPhone.classList.remove('hidden');
+      } else {
+        detailPhone.innerHTML = '';
+        detailPhone.classList.add('hidden');
+      }
+    }
+    if (detailLinks) {
+      detailLinks.innerHTML = '';
+      if (project.googleMapsUrl) {
+        const mapsLink = document.createElement('a');
+        mapsLink.href = project.googleMapsUrl;
+        mapsLink.target = '_blank';
+        mapsLink.rel = 'noopener noreferrer';
+        mapsLink.className = 'maps-link';
+        mapsLink.innerHTML = 'Open in Google Maps';
+        detailLinks.appendChild(mapsLink);
+      }
+    }
+    detailMedia.innerHTML = '';
+    detailMedia.classList.remove('is-empty');
+    if (inlineViewer && inlineViewer.destroy) {
+      inlineViewer.destroy();
+      inlineViewer = null;
+    }
+
+    const hasPanorama = project.media?.type === 'panorama' && project.media.panoramaUrl;
+    const hasTour = project.media?.type === 'tour' && project.media.tourUrl;
+
+    if (hasPanorama) {
+      const panoContainer = document.createElement('div');
+      panoContainer.className = 'pano-inline';
+      detailMedia.appendChild(panoContainer);
+      ensurePannellum()
+        .then(() => {
+          if (!panoContainer.isConnected) return;
+          if (inlineViewer && inlineViewer.destroy) {
+            inlineViewer.destroy();
+          }
+          inlineViewer = pannellum.viewer(panoContainer, {
+            type: 'equirectangular',
+            panorama: project.media.panoramaUrl,
+            autoLoad: true,
+            showControls: true,
+            showFullscreenCtrl: true,
+            showZoomCtrl: true
+          });
+        })
+        .catch(() => {
+          if (!panoContainer.isConnected) return;
+          detailMedia.innerHTML = '';
+          detailMedia.classList.add('is-empty');
+          const link = document.createElement('a');
+          link.href = project.media.panoramaUrl;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = 'Open panorama';
+          link.className = 'tour-link';
+          detailMedia.appendChild(link);
+        });
+    } else if (hasTour) {
+      renderTour(project.media.tourUrl);
+    } else {
+      detailMedia.classList.add('is-empty');
+      detailMedia.textContent = 'Media preview unavailable';
     }
     routeToggle.checked = false;
     if (sticky) {
@@ -533,10 +833,12 @@
     detailsView.classList.add('hidden');
     listView.classList.remove('hidden');
     hideRoute();
-    if (viewer && viewer.destroy) {
-      viewer.destroy();
-      viewer = null;
+    if (inlineViewer && inlineViewer.destroy) {
+      inlineViewer.destroy();
+      inlineViewer = null;
     }
+    detailMedia.innerHTML = 'Media preview unavailable';
+    detailMedia.classList.add('is-empty');
     if(lastFocus){
       lastFocus.focus();
       lastFocus=null;
@@ -630,16 +932,16 @@
     const modal = document.getElementById('panoModal');
     const container = document.getElementById('panoContainer');
     const modalTitle = document.getElementById('panoModalTitle');
-    
+
     modalTitle.textContent = title || '360° View';
     modal.classList.remove('hidden');
-    
+
     // Initialize Pannellum
     ensurePannellum().then(() => {
-      if (viewer && viewer.destroy) {
-        viewer.destroy();
+      if (modalViewer && modalViewer.destroy) {
+        modalViewer.destroy();
       }
-      viewer = pannellum.viewer(container, {
+      modalViewer = pannellum.viewer(container, {
         type: 'equirectangular',
         panorama: url,
         autoLoad: true,
@@ -652,9 +954,9 @@
 
   function closePanoModal() {
     const modal = document.getElementById('panoModal');
-    if (viewer && viewer.destroy) {
-      viewer.destroy();
-      viewer = null;
+    if (modalViewer && modalViewer.destroy) {
+      modalViewer.destroy();
+      modalViewer = null;
     }
     modal.classList.add('hidden');
   }
@@ -705,7 +1007,8 @@
   window.openPanoModal = openPanoModal;
   window.closePanoModal = closePanoModal;
   window.addEventListener('beforeunload',()=>{
-    if(viewer && viewer.destroy){viewer.destroy();}
+    if(inlineViewer && inlineViewer.destroy){inlineViewer.destroy();}
+    if(modalViewer && modalViewer.destroy){modalViewer.destroy();}
     if(threeRenderer && threeRenderer.dispose){
       threeRenderer.dispose();
       threeScene=null; threeCamera=null; raycaster=null; mouse=null;
