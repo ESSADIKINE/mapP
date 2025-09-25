@@ -4,9 +4,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import classNames from 'classnames';
 import { create } from 'zustand';
-import { useDroppable, DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { useDropzone } from 'react-dropzone';
 import { getRoute, formatKm, formatHhMm } from '@/lib/osrm';
 import * as THREE from 'three';
@@ -42,8 +39,7 @@ const ReactPannellum = dynamic(() => import('react-pannellum'), { ssr: false });
  *  longitude: number,
  *  virtualtour?: string,
  *  tourUrl?: string,
- *  modelUrl?: string,
- *  modelPosition?: { x: number, y: number, z: number },
+ *  logoUrl?: string,
 *  zoom?: number,
  *  bounds?: number[][],
  *  heading?: number,
@@ -114,11 +110,6 @@ const useStudio = create((set, get) => ({
       }]
     }
   }),
-  reorderSecondaries: (from, to) => {
-    const s = [...get().project.secondaries];
-    const newOrder = arrayMove(s, from, to);
-    set({ project: { ...get().project, secondaries: newOrder } });
-  },
   replaceSecondary: (idx, patch) => {
     const s = [...get().project.secondaries];
     s[idx] = { ...s[idx], ...patch };
@@ -204,12 +195,12 @@ async function upload3DModel(file) {
  */
 function sanitizeProject(project) {
   const cleanPlace = (p) => {
-    const { modelUrl, modelPath, ...rest } = p;
+    const { modelUrl, modelPath, model3d, modelPosition, ...rest } = p;
     return {
       ...rest,
       virtualtour: p.virtualtour || undefined,
       tourUrl: p.tourUrl || undefined,
-      model3d: modelPath ? { url: modelPath } : p.model3d || undefined
+      logoUrl: p.logoUrl || undefined
     };
   };
 
@@ -250,17 +241,8 @@ async function saveProject(project) {
       };
     }
     
-    const saved = await res.json();
-    const mapPlace = (p) => ({
-      ...p,
-      modelUrl: p.model3d?.url ? `${backend}${p.model3d.url.replace(/^\./, '')}` : undefined,
-      modelPath: p.model3d?.url
-    });
-    return {
-      ...saved,
-      principal: mapPlace(saved.principal),
-      secondaries: saved.secondaries.map(mapPlace)
-    };
+      const saved = await res.json();
+      return saved;
   } catch (error) {
     // Network error or backend not running
     console.warn('Backend connection failed, using mock response:', error.message);
@@ -614,25 +596,6 @@ function generateIntermediateWaypoints(startLng, startLat, endLng, endLat) {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────────────────
-// Drag & Drop building blocks
-
-function SortableItem({ id, index, children }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition
-  };
-  return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}
-      className={classNames('rounded-2xl border mb-2 p-3 bg-white shadow-sm cursor-grab active:cursor-grabbing', {
-        'opacity-70 ring-2 ring-indigo-500': isDragging
-      })}
-    >
-      {children}
-    </div>
-  );
-}
 
 // ────────────────────────────────────────────────────────────────────────────────
 // Dropzone for images
@@ -778,12 +741,13 @@ function MapCanvas() {
             ]
           };
 
-      const m = new maplibregl.Map({
-        container: mapRef.current,
-        style,
-        center: [project.principal.longitude, project.principal.latitude],
-        zoom: project.principal.zoom || 14
-      });
+       const m = new maplibregl.Map({
+         container: mapRef.current,
+         style,
+         center: [project.principal.longitude, project.principal.latitude],
+         zoom: project.principal.zoom || 14,
+         maxZoom: 18
+       });
 
       console.log('Map instance created:', m);
 
@@ -853,91 +817,9 @@ function MapCanvas() {
         setReady(true);
       }, 1000);
 
-      // Add Three.js layer for 3D models
-      const addThreeLayer = () => {
-        if (m.__threeLayer) return;
-        const layer = {
-          id: 'three-models',
-          type: 'custom',
-          renderingMode: '3d',
-                     onAdd(map, gl) {
-             this.map = map;
-             this.camera = new THREE.PerspectiveCamera();
-             this.scene = new THREE.Scene();
-             this.renderer = new THREE.WebGLRenderer({ canvas: map.getCanvas(), context: gl, antialias: true });
-             // disable WebXR to avoid "xr-spatial-tracking" permission warnings
-             this.renderer.xr.enabled = false;
-             this.renderer.autoClear = false;
-             
-             // Add lighting
-             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-             this.scene.add(ambientLight);
-             
-             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-             directionalLight.position.set(10, 10, 5);
-             this.scene.add(directionalLight);
-           },
-          render(gl, matrix) {
-            const mtx = new THREE.Matrix4().fromArray(matrix);
-            this.camera.projectionMatrix = mtx;
-            this.renderer.state.reset();
-            this.renderer.render(this.scene, this.camera);
-            this.map.triggerRepaint();
-          }
-        };
-        m.addLayer(layer);
-        m.__threeLayer = layer;
-      };
+      // Removed 3D layer setup
 
-      m.on('style.load', addThreeLayer);
-
-      // Click to place a 3D model marker
-      m.on('click', (e) => {
-        // Only place models if not clicking on existing models
-        const canvas = m.getCanvas();
-        const rect = canvas.getBoundingClientRect();
-        const mouse = new THREE.Vector2();
-        mouse.x = ((e.point.x - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.point.y - rect.top) / rect.height) * 2 + 1;
-        
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(mouse, m.__threeLayer?.camera);
-        const hits = raycaster.intersectObjects(m.__threeLayer?.scene.children || [], true);
-        
-        if (hits.length > 0) return; // Don't place if clicking on existing model
-        
-        const { lng, lat } = e.lngLat;
-        const id = `place-${Date.now()}`;
-        const layer = m.__threeLayer;
-        if (!layer) return;
-        
-        const merc = maplibregl.MercatorCoordinate.fromLngLat([lng, lat], 0);
-        const scale = merc.meterInMercatorCoordinateUnits();
-        
-        const loader = new GLTFLoader();
-        loader.load(DEFAULT_MODEL_URL, (gltf) => {
-          const model = gltf.scene;
-          model.userData.placeId = id;
-          model.position.set(merc.x, merc.y, merc.z);
-          model.scale.set(scale, scale, scale);
-          
-          // Add rotation to make it face the camera
-          model.rotation.y = Math.PI;
-          
-          layer.scene.add(model);
-          setPendingModel({ 
-            id, 
-            lng, 
-            lat, 
-            model, 
-            base: merc, 
-            offset: { x: 0, y: 0, z: 0 },
-            scale: scale
-          });
-        }, undefined, (error) => {
-          console.error('Error loading 3D model:', error);
-        });
-      });
+      // Removed 3D model placement on click
 
       // Set the map instance after setting up all event listeners
       setMapInstance(m);
@@ -991,57 +873,7 @@ function MapCanvas() {
     }
   }, [maplibregl, mapInstance, project.styleURL, project.principal, project.secondaries.length, setMapInstance]);
 
-  // Handle hover/click interactions on 3D models
-  useEffect(() => {
-    if (!mapInstance || !mapInstance.__threeLayer) return;
-    const canvas = mapInstance.getCanvas();
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-         const getIntersections = (e) => {
-       const rect = canvas.getBoundingClientRect();
-       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-       
-       // For now, skip raycasting to avoid camera issues
-       return [];
-     };
-
-    const handleMove = (e) => {
-      const hits = getIntersections(e);
-      if (hits.length > 0) {
-        const placeId = hits[0].object.userData.placeId;
-        setHoveredPlace(placeId);
-        window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId } }));
-      } else {
-        setHoveredPlace(null);
-        window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId: null } }));
-      }
-    };
-
-    const handleLeave = () => {
-      setHoveredPlace(null);
-      window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId: null } }));
-    };
-
-    const handleClick = (e) => {
-      const hits = getIntersections(e);
-      if (hits.length > 0) {
-        const placeId = hits[0].object.userData.placeId;
-        setSelectedPlace(placeId);
-        window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'click', placeId } }));
-      }
-    };
-
-    canvas.addEventListener('mousemove', handleMove);
-    canvas.addEventListener('mouseleave', handleLeave);
-    canvas.addEventListener('click', handleClick);
-    return () => {
-      canvas.removeEventListener('mousemove', handleMove);
-      canvas.removeEventListener('mouseleave', handleLeave);
-      canvas.removeEventListener('click', handleClick);
-    };
-  }, [mapInstance, setHoveredPlace, setSelectedPlace]);
+  // Removed 3D model hover/click interactions
 
   const updateOffset = (axis, val) => {
     setPendingModel((pm) => {
@@ -1160,18 +992,29 @@ function MapCanvas() {
       mapInstance.__markers.forEach((mk) => mk.remove());
       mapInstance.__markers = [];
 
-      // Clean previous 3D models
-      if (mapInstance.__threeLayer) {
-        if (!mapInstance.__models) mapInstance.__models = [];
-        mapInstance.__models.forEach((obj) => mapInstance.__threeLayer.scene.remove(obj));
-        mapInstance.__models = [];
-      }
+      // 3D models removed
 
       // Principal marker
       const p = project.principal;
       if (isFinite(p.longitude) && isFinite(p.latitude)) {
-        const pm = new maplibregl.Marker({ color: '#111827' })
-          .setLngLat([p.longitude, p.latitude])
+        let principalEl = null as any;
+        if (p.logoUrl) {
+          principalEl = document.createElement('div');
+          principalEl.style.width = '40px';
+          principalEl.style.height = '40px';
+          principalEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.25)';
+          const img = document.createElement('img');
+          img.src = p.logoUrl;
+          img.alt = p.name || 'logo';
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'contain';
+          principalEl.appendChild(img);
+        }
+        const pm = principalEl
+          ? new maplibregl.Marker({ element: principalEl, anchor: 'bottom' })
+          : new maplibregl.Marker({ color: '#111827' });
+        pm.setLngLat([p.longitude, p.latitude])
           .setPopup(new maplibregl.Popup().setHTML(`<div class="text-sm"><b>${p.name}</b><br/>${prettyLatLng(p.latitude, p.longitude)}</div>`))
           .addTo(mapInstance);
         mapInstance.__markers.push(pm);
@@ -1180,28 +1023,25 @@ function MapCanvas() {
       // Secondary markers / models
       project.secondaries.forEach((s, idx) => {
         if (!isFinite(s.longitude) || !isFinite(s.latitude)) return;
-        if (s.modelUrl && mapInstance.__threeLayer) {
-          const loader = new GLTFLoader();
-          loader.load(s.modelUrl, (gltf) => {
-            const model = gltf.scene;
-            model.userData.placeId = s._id;
-            const merc = maplibregl.MercatorCoordinate.fromLngLat([s.longitude, s.latitude], s.modelPosition?.z || 0);
-            const scale = merc.meterInMercatorCoordinateUnits();
-            model.position.set(
-              merc.x + (s.modelPosition?.x || 0) * scale,
-              merc.y + (s.modelPosition?.y || 0) * scale,
-              merc.z + (s.modelPosition?.z || 10) * scale  // Raise the model above ground
-            );
-            // Use a larger scale to make the model more visible
-            const modelScale = scale * 100; // Make it 100x larger
-            model.scale.set(modelScale, modelScale, modelScale);
-            mapInstance.__threeLayer.scene.add(model);
-            mapInstance.__models.push(model);
-            console.log('Secondary 3D model added:', s.name, 'Position:', model.position, 'Scale:', model.scale);
-          });
-        } else {
-          const mk = new maplibregl.Marker({ color: '#2563eb' })
-            .setLngLat([s.longitude, s.latitude])
+        {
+          let el = null as any;
+          if (s.logoUrl) {
+            el = document.createElement('div');
+            el.style.width = '36px';
+            el.style.height = '36px';
+            el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.25)';
+            const img = document.createElement('img');
+            img.src = s.logoUrl;
+            img.alt = s.name || 'logo';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            el.appendChild(img);
+          }
+          const mk = el
+            ? new maplibregl.Marker({ element: el, anchor: 'bottom' })
+            : new maplibregl.Marker({ color: '#2563eb' });
+          mk.setLngLat([s.longitude, s.latitude])
             .setPopup(new maplibregl.Popup().setHTML(`
               <div class="text-sm">
                 <b>${s.name}</b><br/>${prettyLatLng(s.latitude, s.longitude)}<br/>
@@ -1209,16 +1049,16 @@ function MapCanvas() {
                 ${s.footerInfo?.time ? `Time: ${s.footerInfo.time}` : ''}
               </div>`))
             .addTo(mapInstance);
-          const el = mk.getElement();
-          el.addEventListener('mouseenter', () => {
+          const mkEl = mk.getElement();
+          mkEl.addEventListener('mouseenter', () => {
             setHoveredPlace(s._id);
             window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId: s._id } }));
           });
-          el.addEventListener('mouseleave', () => {
+          mkEl.addEventListener('mouseleave', () => {
             setHoveredPlace(null);
             window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'hover', placeId: null } }));
           });
-          el.addEventListener('click', () => {
+          mkEl.addEventListener('click', () => {
             setSelectedPlace(s._id);
             window.dispatchEvent(new CustomEvent('place-event', { detail: { type: 'click', placeId: s._id } }));
           });
@@ -1571,7 +1411,7 @@ function SecondaryCard({ place, index, projectId }) {
           zoom: refreshedPlace.zoom || undefined,
           bounds: refreshedPlace.bounds || undefined,
           footerInfo: refreshedPlace.footerInfo || undefined,
-          model3d: refreshedPlace.modelPath ? { url: refreshedPlace.modelPath } : undefined
+          logoUrl: refreshedPlace.logoUrl || undefined
         };
         const res = await fetch(`${backend}/api/projects/${pid}/places`, {
           method: 'POST',
@@ -1624,6 +1464,16 @@ function SecondaryCard({ place, index, projectId }) {
     }
   }
 
+  // upload logo
+  async function onUploadLogo(file) {
+    try {
+      const res = await uploadImage(file);
+      replaceSecondary(index, { logoUrl: res.url });
+    } catch (e) {
+      alert('Logo upload failed');
+    }
+  }
+
   async function onDelete() {
     if (!window.confirm('Delete this place?')) return;
     try {
@@ -1636,13 +1486,8 @@ function SecondaryCard({ place, index, projectId }) {
     removeSecondary(index);
   }
 
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const style = { transform: CSS.Transform.toString(transform), transition };
-
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}
-      className={classNames('p-3 bg-white rounded-2xl border shadow-sm', { 'opacity-70 ring-2 ring-indigo-500': isDragging })}
-    >
+    <div className="p-3 bg-white rounded-2xl border shadow-sm">
       <div className="flex items-center justify-between">
         <input
           className="text-sm font-semibold bg-transparent outline-none"
@@ -1695,44 +1540,14 @@ function SecondaryCard({ place, index, projectId }) {
          <button className="px-3 py-1 rounded-lg bg-red-600 text-white" onClick={onDelete}>Delete</button>
        </div>
        
-       {/* 3D Model Upload for existing places */}
-       <div className="mt-3">
-         <label className="text-xs font-medium text-gray-700">3D Model (optional):</label>
-         <div className="mt-1">
-           <input
-             type="file"
-             accept=".glb,.gltf"
-             className="w-full text-xs border rounded px-2 py-1"
-                           onChange={async (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                  try {
-                    const uploadResult = await upload3DModel(file);
-                    replaceSecondary(index, {
-                      modelUrl: uploadResult.url,
-                      modelPath: uploadResult.relativeUrl,
-                      customModel: true
-                    });
-                  } catch (error) {
-                    console.error('Upload failed:', error);
-                    alert('Failed to upload 3D model. Please try again.');
-                  }
-                }
-              }}
-           />
-           {place.modelUrl && (
-             <div className="mt-1 text-xs text-green-600">
-               ✓ 3D model loaded
-               <button 
-                 className="ml-2 text-red-500 hover:text-red-700"
-                 onClick={() => replaceSecondary(index, { modelUrl: undefined, modelPath: undefined, customModel: undefined })}
-               >
-                 Remove
-               </button>
-             </div>
-           )}
-         </div>
-       </div>
+      {/* Place logo upload */}
+      <div className="mt-3">
+        <ImageDrop
+          label="Upload logo for this place"
+          previewUrl={place.logoUrl}
+          onUploaded={(url) => replaceSecondary(index, { logoUrl: url })}
+        />
+      </div>
 
       {(place.footerInfo?.distance || place.footerInfo?.time) && (
         <div className="mt-2 text-xs text-gray-700">
@@ -1772,11 +1587,7 @@ function SecondaryCard({ place, index, projectId }) {
 // Main Page
 
 export default function MappingStudio() {
-  const { project, updateProject, reorderSecondaries, backend } = useStudio();
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
+  const { project, updateProject, backend } = useStudio();
 
   async function onSave() {
     const places = [project.principal, ...project.secondaries];
@@ -1789,6 +1600,10 @@ export default function MappingStudio() {
       }
     }
     try {
+      console.log('Saving project with logos:', {
+        principal: { logoUrl: project.principal.logoUrl },
+        secondaries: project.secondaries.map(s => ({ name: s.name, logoUrl: s.logoUrl }))
+      });
       const saved = await saveProject(project);
       useStudio.getState().setProject(saved);
       alert('Saved!');
@@ -1797,13 +1612,6 @@ export default function MappingStudio() {
     }
   }
 
-  const onDragEnd = (event) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const from = parseInt(String(active.id).replace('sec-', ''), 10);
-    const to = parseInt(String(over.id).replace('sec-', ''), 10);
-    reorderSecondaries(from, to);
-  };
 
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -1907,6 +1715,13 @@ export default function MappingStudio() {
                 onUploaded={(url) => updateProject({ principal: { ...project.principal, virtualtour: url, tourUrl: undefined } })}
               />
             </div>
+            <div className="mt-3">
+              <ImageDrop
+                label="Upload principal logo (optional)"
+                previewUrl={project.principal.logoUrl}
+                onUploaded={(url) => updateProject({ principal: { ...project.principal, logoUrl: url } })}
+              />
+            </div>
             <label className="block mt-3 text-xs">Tour URL
               <input type="url" className="w-full mt-1 rounded-lg border p-1" value={project.principal.tourUrl || ''} onChange={(e) => updateProject({ principal: { ...project.principal, tourUrl: e.target.value, virtualtour: undefined } })} />
             </label>
@@ -1924,17 +1739,13 @@ export default function MappingStudio() {
               >Add</button>
             </div>
 
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={project.secondaries.map((_, i) => `sec-${i}`)} strategy={verticalListSortingStrategy}>
-                <div className="mt-3">
-                  {project.secondaries.map((s, i) => (
-                    <SortableItem id={`sec-${i}`} key={`sec-${i}`} index={i}>
-                      <SecondaryCard place={s} index={i} projectId={project._id} />
-                    </SortableItem>
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+             <div className="mt-3">
+               {project.secondaries.map((s, i) => (
+                 <div key={`sec-${i}`} className="rounded-2xl border mb-2 p-3 bg-white shadow-sm">
+                   <SecondaryCard place={s} index={i} projectId={project._id} />
+                 </div>
+               ))}
+             </div>
           </div>
         </section>
 

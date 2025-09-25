@@ -22,13 +22,7 @@ const PlaceSchema = new mongoose.Schema(
     category: { type: String, enum: ['Principal', 'Secondary', 'Other'], default: 'Other' },
     routesFromBase: { type: [String], default: [] }, // encoded polylines (secondary)
     footerInfo: { type: FooterInfoSchema, default: {} },
-    model3d: {
-      url: { type: String },
-      useAsMarker: { type: Boolean, default: false },
-      scale: { type: Number, default: 1 },
-      rotation: { type: [Number], default: [0, 0, 0] },
-      altitude: { type: Number, default: 0 }
-    }
+    logoUrl: { type: String } // Cloudinary URL for place logo
   },
   { _id: true, timestamps: false }
 );

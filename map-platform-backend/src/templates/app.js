@@ -330,37 +330,31 @@
     map.on('load', async () => {
       if (loadingEl) loadingEl.style.display = 'none';
 
-      if (
-        isFinite(data.principal.lon) &&
-        isFinite(data.principal.lat) &&
-        !(data.principal.model3d && data.principal.model3d.useAsMarker)
-      ) {
-        new maplibregl.Marker({ color: '#111827' })
-          .setLngLat([data.principal.lon, data.principal.lat])
+      if (isFinite(data.principal.lon) && isFinite(data.principal.lat)) {
+        let principalEl = null;
+        if (data.principal.logoUrl) {
+          principalEl = document.createElement('div');
+          principalEl.style.width = '40px';
+          principalEl.style.height = '40px';
+          principalEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.25)';
+          const img = document.createElement('img');
+          img.src = data.principal.logoUrl;
+          img.alt = data.principal.name || 'logo';
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'contain';
+          principalEl.appendChild(img);
+        }
+        const pm = principalEl
+          ? new maplibregl.Marker({ element: principalEl, anchor: 'bottom' })
+          : new maplibregl.Marker({ color: '#111827' });
+        pm.setLngLat([data.principal.lon, data.principal.lat])
           .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
           .addTo(map);
-        console.log('Added marker for principal place:', data.principal.name);
-      } else if (data.principal.model3d && data.principal.model3d.useAsMarker) {
-        console.log('Skipping marker for principal place - using 3D model as marker');
+        console.log('Added marker for principal place:', data.principal.name, 'with logo:', !!data.principal.logoUrl);
       }
 
       populateSecondaries();
-      const hasModels = data.principal.model3d || data.secondaries.some((s) => s.model3d);
-      console.log('Project has 3D models:', hasModels);
-      console.log('Principal model3d:', data.principal.model3d);
-      console.log('Secondary models:', data.secondaries.map(s => ({ name: s.name, model3d: s.model3d })));
-      
-      if (hasModels) {
-        console.log('Initializing 3D models...');
-        const three = await ensureThree();
-        if (three) {
-          setupModels();
-        } else {
-          console.error('Failed to load Three.js, 3D models will not be displayed');
-        }
-      } else {
-        console.log('No 3D models found in project data');
-      }
     });
 
     map.on('error', (error) => {
@@ -384,14 +378,27 @@
       if (!isFinite(s.lon) || !isFinite(s.lat)) return;
       let marker = null;
       
-      // Only show marker if no 3D model OR if 3D model is not used as marker
-      if (!s.model3d || !s.model3d.useAsMarker) {
-        marker = new maplibregl.Marker({ color: '#2563eb' }).setLngLat([s.lon, s.lat]).addTo(map);
-        s._marker = marker;
-        console.log('Added marker for:', s.name, '- model3d:', s.model3d);
-      } else {
-        console.log('Skipping marker for:', s.name, '- using 3D model as marker');
+      // Create marker with logo if available
+      let markerEl = null;
+      if (s.logoUrl) {
+        markerEl = document.createElement('div');
+        markerEl.style.width = '36px';
+        markerEl.style.height = '36px';
+        markerEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.25)';
+        const img = document.createElement('img');
+        img.src = s.logoUrl;
+        img.alt = s.name || 'logo';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.objectFit = 'contain';
+        markerEl.appendChild(img);
       }
+      marker = markerEl
+        ? new maplibregl.Marker({ element: markerEl, anchor: 'bottom' })
+        : new maplibregl.Marker({ color: '#2563eb' });
+      marker.setLngLat([s.lon, s.lat]).addTo(map);
+      s._marker = marker;
+      console.log('Added marker for:', s.name, 'with logo:', !!s.logoUrl);
 
       const li = document.createElement('li');
       li.className = 'secondary-item';

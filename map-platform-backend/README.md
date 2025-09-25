@@ -1,6 +1,14 @@
 # Map Platform Backend
 
-A Node.js/Express API for a SaaS-like mapping platform with projects, places, routes, and file uploads.
+A Node.js/Express API for a SaaS-like mapping platform with projects, places, routes, and image uploads.
+
+## Current Features
+
+- Project and place management (principal and secondary places)
+- Per-place media: either a 360° panorama URL or an external tour URL
+- Per-place logo image hosted on Cloudinary (replaces previous 3D model support)
+- Route calculation using OSRM
+- Export a static bundle referencing CDN libraries
 
 ## Setup Instructions
 
@@ -23,7 +31,7 @@ Create a `.env` file in the root directory with the following variables:
 
 **Optional:**
 - `OSRM_HOST`: Custom OSRM server (defaults to router.project-osrm.org)
-- `CLOUDINARY_*`: For Cloudinary file uploads
+- `CLOUDINARY_*`: For Cloudinary image uploads (required if you use upload endpoint)
 
 ### 3. MongoDB Setup
 You have two options:
@@ -57,13 +65,20 @@ npm start
 - `GET /api/projects` - List projects
 - `POST /api/projects` - Create project
 - `GET /api/projects/:id/places` - List places in project
-- `POST /api/upload` - File upload
+- `POST /api/upload` - Upload a place/logo image to Cloudinary (multipart field: `file`)
 - `GET /api/route` - Route calculation
 - `POST /api/projects/:id/export` - Stream project as static ZIP bundle
+
+Removed (legacy):
+- All 3D model upload and serving endpoints
+- Any `model3d` update endpoints on places/projects
 ### Export Bundles
-To include MapLibre and Pannellum assets locally in the exported bundle, install
-`maplibre-gl` and `pannellum` in the backend. If these packages are not
-available, the exporter automatically references CDN-hosted versions.
+The exported bundle includes references to MapLibre and Pannellum. If
+`maplibre-gl` and `pannellum` are installed in the backend, the exporter will
+embed local copies; otherwise, it falls back to CDN-hosted versions.
+
+Note: 3D model assets and Three.js are no longer used. Per-place logos are kept
+as remote Cloudinary URLs and displayed by the frontend.
 
 ## Troubleshooting
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../middlewares/asyncHandler.js';
 import { validate } from '../middlewares/validate.js';
 import { secondaryPlaceZ, secondaryPlacePartialZ } from '../schemas/place.schema.js';
-import { addSecondaryPlace, updatePlace, deletePlace, updatePlaceModel3D } from '../controllers/place.controller.js';
+import { addSecondaryPlace, updatePlace, deletePlace } from '../controllers/place.controller.js';
 import { computeAndAttachRouteToSecondary } from '../controllers/route.controller.js';
 
 const router = Router({ mergeParams: true });
@@ -19,7 +19,6 @@ router.delete('/:placeId', asyncHandler(deletePlace));
 // POST /api/projects/:projectId/places/:placeId/route (compute & attach)
 router.post('/:placeId/route', asyncHandler(computeAndAttachRouteToSecondary));
 
-// PUT /api/projects/:projectId/places/:placeId/model3d (update 3D model)
-router.put('/:placeId/model3d', asyncHandler(updatePlaceModel3D));
+// 3D model routes removed; place logos handled via standard update on place
 
 export default router;

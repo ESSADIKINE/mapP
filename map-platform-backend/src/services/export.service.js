@@ -27,15 +27,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
     media: doc.principal.virtualtour
       ? { type: 'panorama', panoramaUrl: doc.principal.virtualtour }
       : { type: 'tour', tourUrl: doc.principal.tourUrl },
-    model3d: doc.principal.model3d
-      ? {
-          url: doc.principal.model3d.url,
-          useAsMarker: !!doc.principal.model3d.useAsMarker,
-          scale: doc.principal.model3d.scale ?? 1,
-          rotation: doc.principal.model3d.rotation || [0, 0, 0],
-          altitude: doc.principal.model3d.altitude ?? 0
-        }
-      : null,
+    logoUrl: doc.principal.logoUrl || null,
     gallery: [],
     footerInfo: { location: doc.principal.footerInfo?.location || null }
   };
@@ -63,15 +55,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
       media: s.virtualtour
         ? { type: 'panorama', panoramaUrl: s.virtualtour }
         : { type: 'tour', tourUrl: s.tourUrl },
-      model3d: s.model3d
-        ? {
-            url: s.model3d.url,
-            useAsMarker: !!s.model3d.useAsMarker,
-            scale: s.model3d.scale ?? 1,
-            rotation: s.model3d.rotation || [0, 0, 0],
-            altitude: s.model3d.altitude ?? 0
-          }
-        : null,
+      logoUrl: s.logoUrl || null,
       gallery: [],
       footerInfo: {
         location: s.footerInfo?.location || null,
@@ -123,13 +107,12 @@ export async function exportProject(projectId, options, res) {
   console.log('Secondary models:', doc.secondaries?.map(s => ({ name: s.name, model3d: s.model3d })));
   
   const data = buildExportData(doc, options);
-  const hasModels =
-    !!data.principal.model3d || data.secondaries.some((s) => s.model3d);
+  const hasPlaceLogos = !!data.principal.logoUrl || data.secondaries.some((s) => s.logoUrl);
   
   console.log('Processed export data:');
-  console.log('Principal model3d:', data.principal.model3d);
-  console.log('Secondary models:', data.secondaries.map(s => ({ name: s.name, model3d: s.model3d })));
-  console.log('Has models:', hasModels);
+  console.log('Principal logoUrl:', data.principal.logoUrl);
+  console.log('Secondary logoUrls:', data.secondaries.map(s => ({ name: s.name, logoUrl: s.logoUrl })));
+  console.log('Has place logos:', hasPlaceLogos);
 
   // temp dir
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'export-'));
@@ -138,9 +121,7 @@ export async function exportProject(projectId, options, res) {
   await fs.promises.mkdir(path.join(assetsDir, 'js'), { recursive: true });
   await fs.promises.mkdir(path.join(assetsDir, 'css'), { recursive: true });
   await fs.promises.mkdir(imagesDir, { recursive: true });
-  const modelsDir = path.join(tmpDir, 'models');
-  // Always create models directory in case models are added later
-  await fs.promises.mkdir(modelsDir, { recursive: true });
+  // No models directory needed anymore
 
   // logo asset handling with optional retina variant
   if (data.project.logo?.src) {
@@ -168,87 +149,7 @@ export async function exportProject(projectId, options, res) {
     }
   }
 
-  // model asset handling
-  if (hasModels && inlineAssets) {
-    console.log('Processing 3D models for export...');
-    console.log('Models directory path:', modelsDir);
-    
-    // Ensure models directory exists
-    try {
-      await fs.promises.access(modelsDir);
-      console.log('Models directory exists');
-    } catch (error) {
-      console.log('Creating models directory...');
-      await fs.promises.mkdir(modelsDir, { recursive: true });
-      console.log('Models directory created');
-    }
-    const processPlace = async (p) => {
-      if (p.model3d?.url) {
-        try {
-          console.log(`Processing model for ${p.name}: ${p.model3d.url}`);
-          
-          // Handle relative URLs by converting them to absolute URLs
-          let url = p.model3d.url;
-          if (url.startsWith('./uploads/') || url.startsWith('uploads/')) {
-            // Convert relative upload path to absolute server URL
-            url = `${serverUrl}/${url.replace(/^\.?\//, '')}`;
-            console.log(`Converted relative URL to: ${url}`);
-          }
-          
-          // Validate URL format
-          if (!url.startsWith('http')) {
-            console.error(`Invalid URL format for ${p.name}: ${p.model3d.url}`);
-            return;
-          }
-          
-          const urlObj = new URL(url);
-          let ext = path.extname(urlObj.pathname);
-          if (!ext) {
-            // If no extension in URL, try to detect from filename or default to .glb
-            const filename = urlObj.pathname.split('/').pop();
-            if (filename && filename.includes('_glb')) {
-              ext = '.glb';
-            } else {
-              ext = '.glb'; // Default to .glb for 3D models
-            }
-          }
-          const destName = `${slugify(p.id || p.name)}${ext}`;
-          const dest = path.join(modelsDir, destName);
-          
-          console.log(`Downloading model from: ${url}`);
-          try {
-            await download(url, dest);
-            console.log(`Download completed for: ${destName}`);
-          } catch (downloadError) {
-            console.error(`Download failed for ${p.name}:`, downloadError.message);
-            throw downloadError; // Re-throw to be caught by outer catch
-          }
-          
-          // Verify the file was actually downloaded
-          const fileExists = await fs.promises.access(dest).then(() => true).catch(() => false);
-          if (fileExists) {
-            const stats = await fs.promises.stat(dest);
-            console.log(`Model file downloaded successfully: ${destName} (${stats.size} bytes)`);
-            // Use relative path from the HTML file location
-            p.model3d.url = `models/${destName}`;
-            console.log(`Model URL updated to: ${p.model3d.url}`);
-          } else {
-            console.error(`Failed to verify downloaded file: ${dest}`);
-          }
-        } catch (error) {
-          console.error(`Failed to download model for ${p.name}:`, error);
-          // keep remote URL if download fails
-        }
-      } else {
-        console.log(`No model URL for ${p.name}`);
-      }
-    };
-    await processPlace(data.principal);
-    for (const s of data.secondaries) await processPlace(s);
-    console.log('3D model processing complete');
-  } else {
-    console.log('Skipping 3D model processing - hasModels:', hasModels, 'inlineAssets:', inlineAssets);
-  }
+  // No 3D model asset handling
 
   // panorama asset handling - keep Cloudinary URLs for 360° images
   // Only download and localize logo, keep 360° images on Cloudinary
@@ -311,35 +212,6 @@ export async function exportProject(projectId, options, res) {
     : `<script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
   <script>window.PANNELLUM_SRC='https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js';</script>`;
 
-  if (hasModels) {
-    if (inlineAssets && includeLocalLibs) {
-      try {
-        const threeJs = path.resolve('node_modules/three/build/three.min.js');
-        const gltfLoader = path.resolve('node_modules/three/examples/js/loaders/GLTFLoader.js');
-        const dracoLoader = path.resolve('node_modules/three/examples/js/loaders/DRACOLoader.js');
-        const dracoDirSrc = path.resolve('node_modules/three/examples/js/libs/draco');
-        const hasAll = [threeJs, gltfLoader, dracoLoader].every((p) => fs.existsSync(p));
-        if (hasAll && fs.existsSync(dracoDirSrc)) {
-          await fs.promises.copyFile(threeJs, path.join(libsDir, 'three.min.js'));
-          await fs.promises.copyFile(gltfLoader, path.join(libsDir, 'GLTFLoader.js'));
-          await fs.promises.copyFile(dracoLoader, path.join(libsDir, 'DRACOLoader.js'));
-          const dracoDest = path.join(libsDir, 'draco');
-          await fs.promises.mkdir(dracoDest, { recursive: true });
-          for (const f of await fs.promises.readdir(dracoDirSrc)) {
-            await fs.promises.copyFile(path.join(dracoDirSrc, f), path.join(dracoDest, f));
-          }
-          libScripts += `\n<script>window.THREE_SRC='./libs'; window.DRACO_DECODER_PATH='./libs/draco/';</script>`;
-        } else {
-          libScripts += `\n<script>window.THREE_SRC='https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js'; window.DRACO_DECODER_PATH='https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/libs/draco/';</script>`;
-        }
-      } catch {
-        libScripts += `\n<script>window.THREE_SRC='https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js'; window.DRACO_DECODER_PATH='https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/libs/draco/';</script>`;
-      }
-    } else {
-      libScripts += `\n<script>window.THREE_SRC='https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js'; window.DRACO_DECODER_PATH='https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/libs/draco/';</script>`;
-    }
-  }
-
   const inlineDataStr = inlineData
     ? `<script>window.__PROJECT__ = ${JSON.stringify(data)};</script>`
     : '';
@@ -362,23 +234,11 @@ export async function exportProject(projectId, options, res) {
   await fs.promises.writeFile(path.join(assetsDir, 'js', 'app.js'), appJs, 'utf8');
   await fs.promises.writeFile(path.join(assetsDir, 'css', 'styles.css'), stylesCss, 'utf8');
 
-  // Debug: List files in models directory
-  try {
-    const modelFiles = await fs.promises.readdir(modelsDir);
-    console.log('Files in models directory:', modelFiles);
-  } catch (error) {
-    console.log('Models directory is empty or does not exist');
-  }
-
-  // Debug: Check final model URLs in export data
-  console.log('Final export data model URLs:');
-  if (data.principal.model3d) {
-    console.log('Principal model URL:', data.principal.model3d.url);
-  }
+  // Debug: Check final logo URLs in export data
+  console.log('Final export data logo URLs:');
+  console.log('Principal logo URL:', data.principal.logoUrl);
   data.secondaries.forEach((s, i) => {
-    if (s.model3d) {
-      console.log(`Secondary ${i + 1} model URL:`, s.model3d.url);
-    }
+    console.log(`Secondary ${i + 1} logo URL:`, s.logoUrl);
   });
 
   // stream ZIP
