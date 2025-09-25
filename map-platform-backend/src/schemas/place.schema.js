@@ -6,6 +6,7 @@ const basePlaceObject = z.object({
   longitude: z.number(),
   virtualtour: z.string().url().optional(),
   tourUrl: z.string().url().optional(),
+  googleMapsUrl: z.string().url().optional(),
   zoom: z.number().optional(),
   bounds: z.array(z.array(z.number())).length(2).optional(),
   heading: z.number().optional(),

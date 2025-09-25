@@ -76,6 +76,68 @@ body {
   cursor: pointer;
 }
 
+.dropdown {
+  position: relative;
+}
+
+.dropdown-toggle {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+
+.dropdown-toggle:hover {
+  color: #10b981;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 32px;
+  left: 0;
+  min-width: 200px;
+  background: rgba(17, 24, 39, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  padding: 10px 0;
+  z-index: 1200;
+}
+
+.dropdown.open .dropdown-menu {
+  display: block;
+}
+
+.dropdown-menu li {
+  list-style: none;
+}
+
+.dropdown-menu button {
+  width: 100%;
+  padding: 10px 18px;
+  background: transparent;
+  border: none;
+  color: white;
+  text-align: left;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.dropdown-menu button:hover {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.dropdown-empty {
+  display: block;
+  padding: 10px 18px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+}
+
 .nav-menu li a:hover {
   color: #10b981;
 }
@@ -407,35 +469,41 @@ body {
 }
 
 .media-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   padding: 12px 16px;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 10px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+  margin-bottom: 12px;
+}
+
+.media-btn:hover {
+  transform: translateY(-1px);
 }
 
 .pano-btn {
-  background: #10b981;
+  background: linear-gradient(135deg, #f97316, #fb7185);
   color: white;
 }
 
 .pano-btn:hover {
-  background: #059669;
-  transform: translateY(-1px);
+  filter: brightness(1.05);
 }
 
 .tour-btn {
-  background: #3b82f6;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
   color: white;
 }
 
 .tour-btn:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
+  filter: brightness(1.05);
 }
 
 .info-meta {
@@ -445,6 +513,37 @@ body {
   font-size: 14px;
   color: #6b7280;
 }
+
+.detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.detail-links:empty {
+  display: none;
+}
+
+.maps-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.maps-link:hover {
+  background: rgba(59, 130, 246, 0.2);
+  color: #1d4ed8;
+}
+
 
 .route-toggle {
   display: flex;

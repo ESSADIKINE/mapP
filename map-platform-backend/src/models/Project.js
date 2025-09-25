@@ -16,6 +16,7 @@ const PlaceSchema = new mongoose.Schema(
     longitude: { type: Number, required: true },
     virtualtour: { type: String }, // Cloudinary URL
     tourUrl: { type: String },
+    googleMapsUrl: { type: String },
     zoom: { type: Number, default: 15 },
     bounds: { type: [[Number]], default: undefined }, // [[lng,lat],[lng,lat]]
     heading: { type: Number, default: 0 },
