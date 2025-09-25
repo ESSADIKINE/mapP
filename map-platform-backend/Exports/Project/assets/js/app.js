@@ -5,7 +5,8 @@
   let map;
   let currentProject = null;
   let routeLayerId = null;
-  let viewer = null;
+  let inlineViewer = null;
+  let modalViewer = null;
   let stickyProject = null;
   let previewProject = null;
   let threeScene = null;
@@ -422,12 +423,14 @@
     });
   }
   function renderTour(url){
+    detailMedia.classList.remove('is-empty');
     let allowed=false;
     try{
       const host=new URL(url).hostname.replace(/^www\./,'');
       allowed=TOUR_WHITELIST.includes(host);
     }catch{}
     if(!allowed){
+      detailMedia.classList.add('is-empty');
       const a=document.createElement('a');
       a.href=url;
       a.target='_blank';
@@ -446,6 +449,7 @@
     const showFallback=()=>{
       if(loaded) return;
       detailMedia.innerHTML='';
+      detailMedia.classList.add('is-empty');
       const a=document.createElement('a');
       a.href=url;
       a.target='_blank';
@@ -471,24 +475,51 @@
     detailDistance.textContent = project.footerInfo?.distanceText || '';
     detailTime.textContent = project.footerInfo?.timeText || '';
     detailMedia.innerHTML = '';
-    if (viewer && viewer.destroy) {
-      viewer.destroy();
-      viewer = null;
+    detailMedia.classList.remove('is-empty');
+    if (inlineViewer && inlineViewer.destroy) {
+      inlineViewer.destroy();
+      inlineViewer = null;
     }
-    
-    // Create media preview with modal buttons
-    if (project.media?.type === 'panorama' && project.media.panoramaUrl) {
-      const panoBtn = document.createElement('button');
-      panoBtn.textContent = 'View 360° Panorama';
-      panoBtn.className = 'media-btn pano-btn';
-      panoBtn.onclick = () => openPanoModal(project.media.panoramaUrl, project.name);
-      detailMedia.appendChild(panoBtn);
-    } else if (project.media?.type === 'tour' && project.media.tourUrl) {
-      const tourBtn = document.createElement('button');
-      tourBtn.textContent = 'Open Virtual Tour';
-      tourBtn.className = 'media-btn tour-btn';
-      tourBtn.onclick = () => openTourModal(project.media.tourUrl, project.name);
-      detailMedia.appendChild(tourBtn);
+
+    const hasPanorama = project.media?.type === 'panorama' && project.media.panoramaUrl;
+    const hasTour = project.media?.type === 'tour' && project.media.tourUrl;
+
+    if (hasPanorama) {
+      const panoContainer = document.createElement('div');
+      panoContainer.className = 'pano-inline';
+      detailMedia.appendChild(panoContainer);
+      ensurePannellum()
+        .then(() => {
+          if (!panoContainer.isConnected) return;
+          if (inlineViewer && inlineViewer.destroy) {
+            inlineViewer.destroy();
+          }
+          inlineViewer = pannellum.viewer(panoContainer, {
+            type: 'equirectangular',
+            panorama: project.media.panoramaUrl,
+            autoLoad: true,
+            showControls: true,
+            showFullscreenCtrl: true,
+            showZoomCtrl: true
+          });
+        })
+        .catch(() => {
+          if (!panoContainer.isConnected) return;
+          detailMedia.innerHTML = '';
+          detailMedia.classList.add('is-empty');
+          const link = document.createElement('a');
+          link.href = project.media.panoramaUrl;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = 'Open panorama';
+          link.className = 'tour-link';
+          detailMedia.appendChild(link);
+        });
+    } else if (hasTour) {
+      renderTour(project.media.tourUrl);
+    } else {
+      detailMedia.classList.add('is-empty');
+      detailMedia.textContent = 'Media preview unavailable';
     }
     routeToggle.checked = false;
     if (sticky) {
@@ -521,10 +552,12 @@
     detailsView.classList.add('hidden');
     listView.classList.remove('hidden');
     hideRoute();
-    if (viewer && viewer.destroy) {
-      viewer.destroy();
-      viewer = null;
+    if (inlineViewer && inlineViewer.destroy) {
+      inlineViewer.destroy();
+      inlineViewer = null;
     }
+    detailMedia.innerHTML = 'Media preview unavailable';
+    detailMedia.classList.add('is-empty');
     if(lastFocus){
       lastFocus.focus();
       lastFocus=null;
@@ -618,16 +651,16 @@
     const modal = document.getElementById('panoModal');
     const container = document.getElementById('panoContainer');
     const modalTitle = document.getElementById('panoModalTitle');
-    
+
     modalTitle.textContent = title || '360° View';
     modal.classList.remove('hidden');
-    
+
     // Initialize Pannellum
     ensurePannellum().then(() => {
-      if (viewer && viewer.destroy) {
-        viewer.destroy();
+      if (modalViewer && modalViewer.destroy) {
+        modalViewer.destroy();
       }
-      viewer = pannellum.viewer(container, {
+      modalViewer = pannellum.viewer(container, {
         type: 'equirectangular',
         panorama: url,
         autoLoad: true,
@@ -640,9 +673,9 @@
 
   function closePanoModal() {
     const modal = document.getElementById('panoModal');
-    if (viewer && viewer.destroy) {
-      viewer.destroy();
-      viewer = null;
+    if (modalViewer && modalViewer.destroy) {
+      modalViewer.destroy();
+      modalViewer = null;
     }
     modal.classList.add('hidden');
   }
@@ -693,7 +726,8 @@
   window.openPanoModal = openPanoModal;
   window.closePanoModal = closePanoModal;
   window.addEventListener('beforeunload',()=>{
-    if(viewer && viewer.destroy){viewer.destroy();}
+    if(inlineViewer && inlineViewer.destroy){inlineViewer.destroy();}
+    if(modalViewer && modalViewer.destroy){modalViewer.destroy();}
     if(threeRenderer && threeRenderer.dispose){
       threeRenderer.dispose();
       threeScene=null; threeCamera=null; raycaster=null; mouse=null;
