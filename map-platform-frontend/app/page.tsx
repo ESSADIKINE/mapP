@@ -39,6 +39,7 @@ const ReactPannellum = dynamic(() => import('react-pannellum'), { ssr: false });
  *  longitude: number,
  *  virtualtour?: string,
  *  tourUrl?: string,
+ *  googleMapsUrl?: string,
  *  logoUrl?: string,
 *  zoom?: number,
  *  bounds?: number[][],
@@ -76,6 +77,7 @@ const useStudio = create((set, get) => ({
       latitude: 33.529234683566955,
       longitude: -7.685066910530196,
       category: 'Principal',
+      googleMapsUrl: '',
       zoom: 16.4,
       heading: 0,
       footerInfo: { location: 'Oulfa' }
@@ -106,6 +108,7 @@ const useStudio = create((set, get) => ({
       ...get().project,
       secondaries: [...get().project.secondaries, {
         ...place,
+        googleMapsUrl: place.googleMapsUrl || '',
         _id: place._id || `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       }]
     }
@@ -200,7 +203,8 @@ function sanitizeProject(project) {
       ...rest,
       virtualtour: p.virtualtour || undefined,
       tourUrl: p.tourUrl || undefined,
-      logoUrl: p.logoUrl || undefined
+      logoUrl: p.logoUrl || undefined,
+      googleMapsUrl: p.googleMapsUrl || undefined
     };
   };
 
@@ -1411,7 +1415,8 @@ function SecondaryCard({ place, index, projectId }) {
           zoom: refreshedPlace.zoom || undefined,
           bounds: refreshedPlace.bounds || undefined,
           footerInfo: refreshedPlace.footerInfo || undefined,
-          logoUrl: refreshedPlace.logoUrl || undefined
+          logoUrl: refreshedPlace.logoUrl || undefined,
+          googleMapsUrl: refreshedPlace.googleMapsUrl || undefined
         };
         const res = await fetch(`${backend}/api/projects/${pid}/places`, {
           method: 'POST',
@@ -1519,6 +1524,14 @@ function SecondaryCard({ place, index, projectId }) {
 
       <label className="block mt-3 text-xs">Tour URL
         <input type="url" className="w-full mt-1 rounded-lg border p-1" value={place.tourUrl || ''} onChange={(e) => replaceSecondary(index, { tourUrl: e.target.value, virtualtour: undefined })} />
+      </label>
+      <label className="block mt-3 text-xs">Google Maps Link
+        <input
+          type="url"
+          className="w-full mt-1 rounded-lg border p-1"
+          value={place.googleMapsUrl || ''}
+          onChange={(e) => replaceSecondary(index, { googleMapsUrl: e.target.value })}
+        />
       </label>
       {((!place.virtualtour && !place.tourUrl) || (place.virtualtour && place.tourUrl)) && (
         <div className="mt-2 text-xs text-red-600">Provide either a 360 image or a tour URL</div>
@@ -1722,6 +1735,14 @@ export default function MappingStudio() {
                 onUploaded={(url) => updateProject({ principal: { ...project.principal, logoUrl: url } })}
               />
             </div>
+            <label className="block mt-3 text-xs">Google Maps Link
+              <input
+                type="url"
+                className="w-full mt-1 rounded-lg border p-1"
+                value={project.principal.googleMapsUrl || ''}
+                onChange={(e) => updateProject({ principal: { ...project.principal, googleMapsUrl: e.target.value } })}
+              />
+            </label>
             <label className="block mt-3 text-xs">Tour URL
               <input type="url" className="w-full mt-1 rounded-lg border p-1" value={project.principal.tourUrl || ''} onChange={(e) => updateProject({ principal: { ...project.principal, tourUrl: e.target.value, virtualtour: undefined } })} />
             </label>

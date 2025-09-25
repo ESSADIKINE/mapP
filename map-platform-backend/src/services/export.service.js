@@ -28,6 +28,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
       ? { type: 'panorama', panoramaUrl: doc.principal.virtualtour }
       : { type: 'tour', tourUrl: doc.principal.tourUrl },
     logoUrl: doc.principal.logoUrl || null,
+    googleMapsUrl: doc.principal.googleMapsUrl || null,
     gallery: [],
     footerInfo: { location: doc.principal.footerInfo?.location || null }
   };
@@ -56,6 +57,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
         ? { type: 'panorama', panoramaUrl: s.virtualtour }
         : { type: 'tour', tourUrl: s.tourUrl },
       logoUrl: s.logoUrl || null,
+      googleMapsUrl: s.googleMapsUrl || null,
       gallery: [],
       footerInfo: {
         location: s.footerInfo?.location || null,

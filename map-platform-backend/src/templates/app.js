@@ -26,10 +26,15 @@
   const detailMedia = document.getElementById('detailMedia');
   const detailDistance = document.getElementById('detailDistance');
   const detailTime = document.getElementById('detailTime');
+  const detailLinks = document.getElementById('detailLinks');
   const routeToggle = document.getElementById('routeToggle');
   const backBtn = document.getElementById('backBtn');
   const TOUR_WHITELIST = ['my.matterport.com','kuula.co','youzvirtualtour.com'];
   const logoEl = document.getElementById('logo');
+  const placesMenu = document.getElementById('placesMenu');
+  const placesButton = document.getElementById('placesMenuButton');
+  const placesDropdown = document.getElementById('placesDropdown');
+  let placesDropdownOpen = false;
 
   if (logoEl) {
     logoEl.addEventListener('click', () => {
@@ -40,6 +45,37 @@
       }
     });
   }
+
+  function closePlacesDropdown() {
+    if (!placesMenu || !placesDropdownOpen) return;
+    placesMenu.classList.remove('open');
+    placesDropdownOpen = false;
+  }
+
+  function openPlacesDropdown() {
+    if (!placesMenu || placesDropdownOpen) return;
+    placesMenu.classList.add('open');
+    placesDropdownOpen = true;
+  }
+
+  function togglePlacesDropdown() {
+    if (placesDropdownOpen) closePlacesDropdown();
+    else openPlacesDropdown();
+  }
+
+  if (placesButton) {
+    placesButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      togglePlacesDropdown();
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!placesMenu) return;
+    if (placesMenu.contains(event.target)) return;
+    closePlacesDropdown();
+  });
 
   function loadScript(src){
     return new Promise((res,rej)=>{
@@ -115,6 +151,53 @@
     });
     return out;
   }
+
+  function focusPlaceOnMap(place) {
+    if (!map || !place) return;
+    if (!isFinite(place.lon) || !isFinite(place.lat)) return;
+    const zoom = isFinite(place.zoom) ? Math.min(place.zoom, 18) : Math.min(data.principal.zoom || 15, 18);
+    map.flyTo({ center: [place.lon, place.lat], zoom, duration: 1000 });
+  }
+
+  function renderPlacesDropdown() {
+    if (!placesDropdown) return;
+    placesDropdown.innerHTML = '';
+    const places = (data.secondaries || []).filter((s) => isFinite(s.lon) && isFinite(s.lat));
+    if (!places.length) {
+      const empty = document.createElement('li');
+      const span = document.createElement('span');
+      span.className = 'dropdown-empty';
+      span.textContent = 'No secondary places yet';
+      empty.appendChild(span);
+      placesDropdown.appendChild(empty);
+      return;
+    }
+
+    places.forEach((place) => {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = place.name || 'Unnamed place';
+      btn.addEventListener('click', () => {
+        closePlacesDropdown();
+        focusPlaceOnMap(place);
+        openDetails(place, true);
+      });
+      li.appendChild(btn);
+      placesDropdown.appendChild(li);
+    });
+  }
+
+  function openPlaceMedia(place) {
+    if (!place || !place.media) return;
+    if (place.media.type === 'panorama' && place.media.panoramaUrl) {
+      openPanoModal(place.media.panoramaUrl, place.name);
+    } else if (place.media.type === 'tour' && place.media.tourUrl) {
+      openTourModal(place.media.tourUrl, place.name);
+    }
+  }
+
+  renderPlacesDropdown();
 
   function loadModel(place) {
     if (!place.model3d || !place.model3d.url || !window.THREE) {
@@ -351,6 +434,15 @@
         pm.setLngLat([data.principal.lon, data.principal.lat])
           .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
           .addTo(map);
+        const principalMarkerEl = pm.getElement();
+        if (principalMarkerEl) {
+          principalMarkerEl.style.cursor = 'pointer';
+          principalMarkerEl.addEventListener('click', () => {
+            closePlacesDropdown();
+            openPlaceMedia(data.principal);
+            openDetails(data.principal, true);
+          });
+        }
         console.log('Added marker for principal place:', data.principal.name, 'with logo:', !!data.principal.logoUrl);
       }
 
@@ -374,6 +466,7 @@
 
   function populateSecondaries() {
     listEl.innerHTML = '';
+    renderPlacesDropdown();
     data.secondaries.forEach((s) => {
       if (!isFinite(s.lon) || !isFinite(s.lat)) return;
       let marker = null;
@@ -427,9 +520,17 @@
       li.addEventListener('mouseleave', () => marker && marker.getElement().classList.remove('marker-highlight'));
       listEl.appendChild(li);
       if (marker) {
-        marker.getElement().addEventListener('mouseenter', () => showPreview(s));
-        marker.getElement().addEventListener('mouseleave', () => cancelPreview());
-        marker.getElement().addEventListener('click', open);
+        const markerEl = marker.getElement();
+        markerEl.style.cursor = 'pointer';
+        markerEl.addEventListener('mouseenter', () => showPreview(s));
+        markerEl.addEventListener('mouseleave', () => cancelPreview());
+        markerEl.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          closePlacesDropdown();
+          openPlaceMedia(s);
+          open();
+        });
       }
     });
   }
@@ -482,6 +583,18 @@
     copyBtn.onclick = () => navigator.clipboard.writeText(coordsText);
     detailDistance.textContent = project.footerInfo?.distanceText || '';
     detailTime.textContent = project.footerInfo?.timeText || '';
+    if (detailLinks) {
+      detailLinks.innerHTML = '';
+      if (project.googleMapsUrl) {
+        const mapsLink = document.createElement('a');
+        mapsLink.href = project.googleMapsUrl;
+        mapsLink.target = '_blank';
+        mapsLink.rel = 'noopener noreferrer';
+        mapsLink.className = 'maps-link';
+        mapsLink.innerHTML = 'Open in Google Maps';
+        detailLinks.appendChild(mapsLink);
+      }
+    }
     detailMedia.innerHTML = '';
     if (viewer && viewer.destroy) {
       viewer.destroy();

@@ -20,6 +20,7 @@ export interface Place {
   longitude: number
   virtualtour?: string
   tourUrl?: string
+  googleMapsUrl?: string
   zoom?: number
   bounds?: [number, number][]
   heading?: number
