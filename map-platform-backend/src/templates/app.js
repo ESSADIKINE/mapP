@@ -27,6 +27,10 @@
   const detailDistance = document.getElementById('detailDistance');
   const detailTime = document.getElementById('detailTime');
   const detailLinks = document.getElementById('detailLinks');
+  const detailPlaceType = document.getElementById('detailPlaceType');
+  const detailDescription = document.getElementById('detailDescription');
+  const detailAddress = document.getElementById('detailAddress');
+  const detailPhone = document.getElementById('detailPhone');
   const routeToggle = document.getElementById('routeToggle');
   const backBtn = document.getElementById('backBtn');
   const TOUR_WHITELIST = ['my.matterport.com','kuula.co','youzvirtualtour.com'];
@@ -35,6 +39,8 @@
   const placesButton = document.getElementById('placesMenuButton');
   const placesDropdown = document.getElementById('placesDropdown');
   let placesDropdownOpen = false;
+  if (detailAddress) detailAddress.classList.add('detail-contact--address');
+  if (detailPhone) detailPhone.classList.add('detail-contact--phone');
 
   if (logoEl) {
     logoEl.addEventListener('click', () => {
@@ -76,6 +82,55 @@
     if (placesMenu.contains(event.target)) return;
     closePlacesDropdown();
   });
+
+  const HTML_ESCAPE_LOOKUP = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+
+  function escapeHtml(value) {
+    if (value == null) return '';
+    return String(value).replace(/[&<>"']/g, (match) => HTML_ESCAPE_LOOKUP[match] || match);
+  }
+
+  function formatTelHref(phone) {
+    if (!phone) return '';
+    const trimmed = phone.trim();
+    if (!trimmed) return '';
+    const normalized = trimmed.replace(/[^+\d]/g, '');
+    if (!normalized) return '';
+    return normalized;
+  }
+
+  function buildPrincipalPopupHtml(place = {}) {
+    const title = escapeHtml(place.name || 'Principal place');
+    const typeLine = place.placeType ? `<div class="principal-popup__subtitle">${escapeHtml(place.placeType)}</div>` : '';
+    const description = place.description
+      ? `<p class="principal-popup__description">${escapeHtml(place.description)}</p>`
+      : '';
+    const address = place.address
+      ? `<div class="principal-popup__meta-item"><span class="principal-popup__icon">📍</span><span>${escapeHtml(place.address)}</span></div>`
+      : '';
+    const phone = place.phone
+      ? `<div class="principal-popup__meta-item"><span class="principal-popup__icon">☎️</span><a href="tel:${formatTelHref(place.phone)}">${escapeHtml(place.phone)}</a></div>`
+      : '';
+    const meta = address || phone ? `<div class="principal-popup__meta">${address}${phone}</div>` : '';
+    const mapsButton = place.googleMapsUrl
+      ? `<a class="principal-popup__cta" href="${escapeHtml(place.googleMapsUrl)}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>`
+      : '';
+    return `
+      <div class="principal-popup__wrap">
+        <div class="principal-popup__title">${title}</div>
+        ${typeLine}
+        ${description}
+        ${meta}
+        ${mapsButton}
+      </div>
+    `;
+  }
 
   function loadScript(src){
     return new Promise((res,rej)=>{
@@ -431,14 +486,62 @@
         const pm = principalEl
           ? new maplibregl.Marker({ element: principalEl, anchor: 'bottom' })
           : new maplibregl.Marker({ color: '#111827' });
-        pm.setLngLat([data.principal.lon, data.principal.lat])
-          .setPopup(new maplibregl.Popup().setHTML(`<div><b>${data.principal.name}</b><br/>Principal Place</div>`))
-          .addTo(map);
+        pm.setLngLat([data.principal.lon, data.principal.lat]).addTo(map);
+
+        const principalPopup = new maplibregl.Popup({
+          closeButton: false,
+          closeOnClick: false,
+          className: 'principal-popup',
+          offset: 32
+        }).setHTML(buildPrincipalPopupHtml(data.principal));
+
+        let principalMarkerHover = false;
+        let principalPopupHover = false;
+
+        const showPrincipalPopup = () => {
+          principalPopup.setLngLat([data.principal.lon, data.principal.lat]).addTo(map);
+        };
+
+        const hidePrincipalPopup = () => {
+          setTimeout(() => {
+            if (!principalMarkerHover && !principalPopupHover) {
+              principalPopup.remove();
+              principalPopupHover = false;
+            }
+          }, 120);
+        };
+
+        principalPopup.on('open', () => {
+          const popupEl = principalPopup.getElement();
+          if (!popupEl) return;
+          popupEl.addEventListener('mouseenter', () => {
+            principalPopupHover = true;
+          });
+          popupEl.addEventListener('mouseleave', () => {
+            principalPopupHover = false;
+            hidePrincipalPopup();
+          });
+        });
+
         const principalMarkerEl = pm.getElement();
         if (principalMarkerEl) {
           principalMarkerEl.style.cursor = 'pointer';
+          principalMarkerEl.tabIndex = 0;
+          const handleEnter = () => {
+            principalMarkerHover = true;
+            showPrincipalPopup();
+          };
+          const handleLeave = () => {
+            principalMarkerHover = false;
+            hidePrincipalPopup();
+          };
+          principalMarkerEl.addEventListener('mouseenter', handleEnter);
+          principalMarkerEl.addEventListener('mouseleave', handleLeave);
+          principalMarkerEl.addEventListener('focus', handleEnter);
+          principalMarkerEl.addEventListener('blur', handleLeave);
           principalMarkerEl.addEventListener('click', () => {
             closePlacesDropdown();
+            showPrincipalPopup();
             openPlaceMedia(data.principal);
             openDetails(data.principal, true);
           });
@@ -497,11 +600,13 @@
       li.className = 'secondary-item';
       li.tabIndex = 0;
       li.setAttribute('role','button');
-      li.innerHTML = `<span>${s.name}</span>` +
-        (s.category ? ` <span class="badge">${s.category}</span>` : '') +
-        (s.footerInfo?.distanceText ? ` <span class="badge">${s.footerInfo.distanceText}</span>` : '') +
-        (s.footerInfo?.timeText ? ` <span class="badge">${s.footerInfo.timeText}</span>` : '') +
-        (s.model3d ? ` <span class="badge">3D</span>` : '');
+      const badges = [];
+      if (s.category) badges.push(`<span class="badge">${escapeHtml(s.category)}</span>`);
+      if (s.placeType) badges.push(`<span class="badge badge-muted">${escapeHtml(s.placeType)}</span>`);
+      if (s.footerInfo?.distanceText) badges.push(`<span class="badge">${escapeHtml(s.footerInfo.distanceText)}</span>`);
+      if (s.footerInfo?.timeText) badges.push(`<span class="badge">${escapeHtml(s.footerInfo.timeText)}</span>`);
+      if (s.model3d) badges.push('<span class="badge">3D</span>');
+      li.innerHTML = `<span>${escapeHtml(s.name || 'Unnamed place')}</span>` + (badges.length ? ` ${badges.join(' ')}` : '');
       s._li = li;
 
       const open = () => openDetails(s, true);
@@ -583,6 +688,47 @@
     copyBtn.onclick = () => navigator.clipboard.writeText(coordsText);
     detailDistance.textContent = project.footerInfo?.distanceText || '';
     detailTime.textContent = project.footerInfo?.timeText || '';
+    if (detailPlaceType) {
+      if (project.placeType) {
+        detailPlaceType.textContent = project.placeType;
+        detailPlaceType.classList.remove('hidden');
+      } else {
+        detailPlaceType.textContent = '';
+        detailPlaceType.classList.add('hidden');
+      }
+    }
+    if (detailDescription) {
+      if (project.description) {
+        detailDescription.textContent = project.description;
+        detailDescription.classList.remove('hidden');
+      } else {
+        detailDescription.textContent = '';
+        detailDescription.classList.add('hidden');
+      }
+    }
+    if (detailAddress) {
+      if (project.address) {
+        detailAddress.textContent = project.address;
+        detailAddress.classList.remove('hidden');
+      } else {
+        detailAddress.textContent = '';
+        detailAddress.classList.add('hidden');
+      }
+    }
+    if (detailPhone) {
+      if (project.phone) {
+        const href = formatTelHref(project.phone);
+        if (href) {
+          detailPhone.innerHTML = `<a href="tel:${href}">${escapeHtml(project.phone)}</a>`;
+        } else {
+          detailPhone.textContent = project.phone;
+        }
+        detailPhone.classList.remove('hidden');
+      } else {
+        detailPhone.innerHTML = '';
+        detailPhone.classList.add('hidden');
+      }
+    }
     if (detailLinks) {
       detailLinks.innerHTML = '';
       if (project.googleMapsUrl) {

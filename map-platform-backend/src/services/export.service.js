@@ -29,6 +29,10 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
       : { type: 'tour', tourUrl: doc.principal.tourUrl },
     logoUrl: doc.principal.logoUrl || null,
     googleMapsUrl: doc.principal.googleMapsUrl || null,
+    address: doc.principal.address || null,
+    phone: doc.principal.phone || null,
+    description: doc.principal.description || null,
+    placeType: doc.principal.placeType || null,
     gallery: [],
     footerInfo: { location: doc.principal.footerInfo?.location || null }
   };
@@ -53,6 +57,10 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
       category: s.category,
       lat: Number(s.latitude),
       lon: Number(s.longitude),
+      address: s.address || null,
+      phone: s.phone || null,
+      description: s.description || null,
+      placeType: s.placeType || null,
       media: s.virtualtour
         ? { type: 'panorama', panoramaUrl: s.virtualtour }
         : { type: 'tour', tourUrl: s.tourUrl },

@@ -24,6 +24,10 @@ export interface Place {
   zoom?: number
   bounds?: [number, number][]
   heading?: number
+  address?: string
+  phone?: string
+  description?: string
+  placeType?: string
   category: 'Principal' | 'Secondary' | 'Other'
   routesFromBase?: string[]
   modelUrl?: string

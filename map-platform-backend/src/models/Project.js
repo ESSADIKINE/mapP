@@ -17,6 +17,10 @@ const PlaceSchema = new mongoose.Schema(
     virtualtour: { type: String }, // Cloudinary URL
     tourUrl: { type: String },
     googleMapsUrl: { type: String },
+    address: { type: String },
+    phone: { type: String },
+    description: { type: String },
+    placeType: { type: String },
     zoom: { type: Number, default: 15 },
     bounds: { type: [[Number]], default: undefined }, // [[lng,lat],[lng,lat]]
     heading: { type: Number, default: 0 },
