@@ -40,7 +40,7 @@
   const placesButton = document.getElementById('placesMenuButton');
   const placesDropdown = document.getElementById('placesDropdown');
   let placesDropdownOpen = false;
-
+  
   if (detailAddress) detailAddress.classList.add('detail-contact--address');
   if (detailPhone) detailPhone.classList.add('detail-contact--phone');
 
