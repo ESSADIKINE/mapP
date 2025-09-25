@@ -309,16 +309,37 @@
               }
             },
             layers: [
-              { id: 'satellite-layer', type: 'raster', source: 'satellite', minzoom: 0, maxzoom: 22 }
+              { id: 'satellite-layer', type: 'raster', source: 'satellite', minzoom: 0, maxzoom: 19 }
             ]
           };
+
+    const deriveStyleMaxZoom = (styleDefinition) => {
+      if (!styleDefinition || typeof styleDefinition === 'string') {
+        return undefined;
+      }
+      if (!Array.isArray(styleDefinition.layers)) {
+        return undefined;
+      }
+      const zoomLevels = styleDefinition.layers
+        .map((layer) => (typeof layer.maxzoom === 'number' ? layer.maxzoom : undefined))
+        .filter((value) => Number.isFinite(value));
+      if (!zoomLevels.length) {
+        return undefined;
+      }
+      return Math.max(...zoomLevels);
+    };
+
+    const DEFAULT_TILE_MAX_ZOOM = 19;
+    const styleMaxZoom = deriveStyleMaxZoom(style) ?? DEFAULT_TILE_MAX_ZOOM;
+    const projectMaxZoom = Number.isFinite(data.project?.maxZoom) ? data.project.maxZoom : styleMaxZoom;
+    const mapMaxZoom = Math.min(projectMaxZoom, styleMaxZoom);
 
     map = new maplibregl.Map({
       container: 'map',
       style,
       center: [data.principal.lon, data.principal.lat],
       zoom: data.principal.zoom || 13,
-      maxZoom: typeof data.project?.maxZoom === 'number' ? data.project.maxZoom : 22
+      maxZoom: mapMaxZoom
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
@@ -327,12 +348,13 @@
     map.on('load', async () => {
       if (loadingEl) loadingEl.style.display = 'none';
 
-      const desiredMaxZoom = typeof data.principal?.maxZoom === 'number'
+      const desiredMaxZoom = Number.isFinite(data.principal?.maxZoom)
         ? data.principal.maxZoom
-        : map.getMaxZoom();
-      const clampedZoom = Math.min(desiredMaxZoom, map.getMaxZoom());
-      if (map.getZoom() < clampedZoom) {
-        map.setZoom(clampedZoom);
+        : mapMaxZoom;
+      const effectiveMaxZoom = Math.min(desiredMaxZoom, mapMaxZoom);
+      map.setMaxZoom(mapMaxZoom);
+      if (map.getZoom() > effectiveMaxZoom) {
+        map.setZoom(effectiveMaxZoom);
       }
 
       if (
@@ -377,7 +399,13 @@
             tileSize: 256,
             attribution: '© Stadia Maps'
           });
-          map.addLayer({ id: 'fallback-sat-layer', type: 'raster', source: 'fallback-satellite', minzoom: 0, maxzoom: 20 });
+          map.addLayer({
+            id: 'fallback-sat-layer',
+            type: 'raster',
+            source: 'fallback-satellite',
+            minzoom: 0,
+            maxzoom: mapMaxZoom
+          });
         }
       }
     });
