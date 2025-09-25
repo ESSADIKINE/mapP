@@ -309,7 +309,7 @@
               }
             },
             layers: [
-              { id: 'satellite-layer', type: 'raster', source: 'satellite', minzoom: 0, maxzoom: 20 }
+              { id: 'satellite-layer', type: 'raster', source: 'satellite', minzoom: 0, maxzoom: 22 }
             ]
           };
 
@@ -317,7 +317,8 @@
       container: 'map',
       style,
       center: [data.principal.lon, data.principal.lat],
-      zoom: data.principal.zoom || 13
+      zoom: data.principal.zoom || 13,
+      maxZoom: typeof data.project?.maxZoom === 'number' ? data.project.maxZoom : 22
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
@@ -325,6 +326,14 @@
 
     map.on('load', async () => {
       if (loadingEl) loadingEl.style.display = 'none';
+
+      const desiredMaxZoom = typeof data.principal?.maxZoom === 'number'
+        ? data.principal.maxZoom
+        : map.getMaxZoom();
+      const clampedZoom = Math.min(desiredMaxZoom, map.getMaxZoom());
+      if (map.getZoom() < clampedZoom) {
+        map.setZoom(clampedZoom);
+      }
 
       if (
         isFinite(data.principal.lon) &&
