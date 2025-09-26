@@ -53,6 +53,13 @@ export interface Project {
   updatedAt?: string
 }
 
+export interface ProjectSummary {
+  _id: string
+  title: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface UploadResponse {
   url: string
   public_id: string

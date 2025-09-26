@@ -24,6 +24,17 @@ const defaultProject: Project = {
   secondaries: [],
 }
 
+export function createDefaultProject(): Project {
+  return {
+    ...defaultProject,
+    principal: {
+      ...defaultProject.principal,
+      footerInfo: { ...defaultProject.principal.footerInfo },
+    },
+    secondaries: [],
+  }
+}
+
 export type StudioState = {
   backend: string
   project: Project
@@ -42,6 +53,7 @@ export type StudioState = {
   setMapInstance: (map: import('maplibre-gl').Map | null) => void
   setHoveredPlace: (id: string | null) => void
   setSelectedPlace: (id: string | null) => void
+  resetProject: () => void
 }
 
 function withId(place: Place | Partial<Place>): Place {
@@ -75,7 +87,7 @@ function withId(place: Place | Partial<Place>): Place {
 
 export const useStudio = create<StudioState>((set, get) => ({
   backend: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000',
-  project: defaultProject,
+  project: createDefaultProject(),
   mapLib: null,
   mapInstance: null,
   hoveredPlaceId: null,
@@ -113,4 +125,5 @@ export const useStudio = create<StudioState>((set, get) => ({
   setMapInstance: (map) => set({ mapInstance: map }),
   setHoveredPlace: (id) => set({ hoveredPlaceId: id }),
   setSelectedPlace: (id) => set({ selectedPlaceId: id }),
+  resetProject: () => set({ project: createDefaultProject() }),
 }))

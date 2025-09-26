@@ -1,7 +1,7 @@
 'use client'
 
 import type { Feature, LineString } from 'geojson'
-import type { Place, Project, UploadResponse } from '@/types'
+import type { Place, Project, ProjectSummary, UploadResponse } from '@/types'
 import { formatHhMm, formatKm, getRoute } from './osrm'
 
 export function prettyLatLng(lat: number, lng: number): string {
@@ -59,10 +59,13 @@ export function sanitizeProject(project: Project): Project {
 
 export async function saveProject(project: Project, backend: string): Promise<Project> {
   const payload = sanitizeProject(project)
+  const hasId = Boolean(project._id)
+  const endpoint = hasId ? `${backend}/api/projects/${project._id}` : `${backend}/api/projects`
+  const method = hasId ? 'PUT' : 'POST'
 
   try {
-    const res = await fetch(`${backend}/api/projects`, {
-      method: 'POST',
+    const res = await fetch(endpoint, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
@@ -74,7 +77,7 @@ export async function saveProject(project: Project, backend: string): Promise<Pr
     return res.json()
   } catch (error) {
     console.warn('Falling back to mock project save', error)
-    const mockId = `mock-${Date.now()}`
+    const mockId = project._id || `mock-${Date.now()}`
     return {
       ...project,
       _id: mockId,
@@ -82,9 +85,40 @@ export async function saveProject(project: Project, backend: string): Promise<Pr
         ...place,
         _id: place._id || `place-${mockId}-${index}`,
       })),
-      createdAt: new Date().toISOString(),
+      createdAt: project.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
+  }
+}
+
+export async function fetchProjectSummaries(backend: string): Promise<ProjectSummary[]> {
+  try {
+    const res = await fetch(`${backend}/api/projects`)
+    if (!res.ok) {
+      throw new Error(`List failed: ${res.status}`)
+    }
+    const items: ProjectSummary[] = await res.json()
+    return items
+  } catch (error) {
+    console.error('Unable to fetch project list', error)
+    throw error
+  }
+}
+
+export async function fetchProjectById(id: string, backend: string): Promise<Project> {
+  try {
+    const res = await fetch(`${backend}/api/projects/${id}`)
+    if (!res.ok) {
+      throw new Error(`Fetch project failed: ${res.status}`)
+    }
+    const project: Project = await res.json()
+    return {
+      ...project,
+      secondaries: project.secondaries ?? [],
+    }
+  } catch (error) {
+    console.error('Unable to fetch project data', error)
+    throw error
   }
 }
 
