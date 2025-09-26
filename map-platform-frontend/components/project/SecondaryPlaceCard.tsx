@@ -9,6 +9,7 @@ import type { LibraryAsset, Place } from '@/types'
 import { AssetSelectorField } from '@/components/library/AssetSelectorField'
 import { PlaceTypeSelectField } from '@/components/library/PlaceTypeSelectField'
 import { MediaPreview } from './MediaPreview'
+import { toast } from '@/lib/toast'
 
 interface SecondaryPlaceCardProps {
   place: Place
@@ -75,7 +76,7 @@ export function SecondaryPlaceCard({ place }: SecondaryPlaceCardProps) {
       })
     } catch (error) {
       console.error('Routing failed', error)
-      alert('Unable to compute route. Please try again later.')
+      toast.error('Unable to compute route. Please try again later.')
     } finally {
       setIsRouting(false)
     }

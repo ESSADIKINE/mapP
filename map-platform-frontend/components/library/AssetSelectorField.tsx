@@ -6,6 +6,7 @@ import { ImageIcon, Loader2, PlusCircle, XCircle } from 'lucide-react'
 import { uploadImage } from '@/lib/api'
 import { useAssetLibrary } from '@/lib/assetLibraryStore'
 import type { AssetKind, LibraryAsset } from '@/types'
+import { toast } from '@/lib/toast'
 
 interface AssetSelectorFieldProps {
   label: string
@@ -62,12 +63,12 @@ export function AssetSelectorField({ label, description, type, value, backend, o
 
   const handleUpload = useCallback(async () => {
     if (!selectedFile) {
-      alert('Select an image to upload.')
+      toast.warning('Select an image to upload.')
       return
     }
     const trimmedLabel = newLabel.trim()
     if (!trimmedLabel) {
-      alert('Provide a label for this asset before uploading.')
+      toast.info('Provide a label for this asset before uploading.')
       return
     }
     setUploading(true)
@@ -81,9 +82,10 @@ export function AssetSelectorField({ label, description, type, value, backend, o
       })
       onChange(asset)
       resetUploader()
+      toast.success('Asset uploaded to your library.')
     } catch (error) {
       console.error('Asset upload failed', error)
-      alert('Unable to upload the asset. Please try again.')
+      toast.error('Unable to upload the asset. Please try again.')
     } finally {
       setUploading(false)
     }

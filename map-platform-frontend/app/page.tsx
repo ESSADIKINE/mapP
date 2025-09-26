@@ -12,6 +12,7 @@ import { useStudio } from '@/lib/studioStore'
 import { saveProject } from '@/lib/api'
 import type { ExportOptions } from '@/types'
 import { useAssetLibrary } from '@/lib/assetLibraryStore'
+import { toast } from '@/lib/toast'
 
 const DEFAULT_EXPORT: ExportOptions = {
   includeSecondaries: true,
@@ -47,7 +48,7 @@ export default function StudioPage() {
       const hasPano = Boolean(place.virtualtour)
       const hasTour = Boolean(place.tourUrl)
       if (hasPano === hasTour) {
-        alert(`Place "${place.name}" must include either a 360° image or a tour URL.`)
+        toast.warning(`Place "${place.name}" must include either a 360° image or a tour URL.`)
         return false
       }
     }
@@ -62,7 +63,7 @@ export default function StudioPage() {
       return saved
     } catch (error) {
       console.error(error)
-      alert('Unable to save the project. Please try again.')
+      toast.error('Unable to save the project. Please try again.')
       throw error
     } finally {
       setSaving(false)
@@ -108,7 +109,7 @@ export default function StudioPage() {
       setExportOpen(false)
     } catch (error) {
       console.error(error)
-      alert('Unable to export the project. Please verify the backend service.')
+      toast.error('Unable to export the project. Please verify the backend service.')
     } finally {
       setExporting(false)
     }
