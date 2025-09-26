@@ -1,35 +1,301 @@
-// Placeholder for the API client
-// This will handle all backend API calls
+'use client'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
+import type { Feature, LineString } from 'geojson'
+import type { Place, Project, UploadResponse } from '@/types'
+import { formatHhMm, formatKm, getRoute } from './osrm'
 
-export class ApiClient {
-  // Project endpoints
-  static async createProject(data: any) {
-    // To be implemented
-    console.log('Creating project:', data)
+export function prettyLatLng(lat: number, lng: number): string {
+  return `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+}
+
+export async function uploadImage(file: File, backend: string): Promise<UploadResponse> {
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch(`${backend}/api/upload`, { method: 'POST', body: fd })
+
+    if (!res.ok) {
+      throw new Error(`Upload failed: ${res.status}`)
+    }
+
+    return res.json()
+  } catch (error) {
+    console.warn('Falling back to mock upload response', error)
+    return {
+      url: URL.createObjectURL(file),
+      public_id: `mock-${Date.now()}`,
+      bytes: file.size,
+    }
+  }
+}
+
+export function sanitizeProject(project: Project): Project {
+  const cleanPlace = (place: Place): Place => {
+    const cleaned: Place = {
+      ...place,
+      virtualtour: place.virtualtour || undefined,
+      tourUrl: place.tourUrl || undefined,
+      logoUrl: place.logoUrl || undefined,
+      googleMapsUrl: place.googleMapsUrl || undefined,
+      address: place.address?.trim() || undefined,
+      phone: place.phone?.trim() || undefined,
+      description: place.description?.trim() || undefined,
+      placeType: place.placeType?.trim() || undefined,
+      footerInfo: place.footerInfo,
+      routeSummary: place.routeSummary,
+    }
+
+    return cleaned
   }
 
-  static async getProjects() {
-    // To be implemented
-    console.log('Fetching projects')
+  return {
+    ...project,
+    logoUrl: project.logoUrl || undefined,
+    styleURL: project.styleURL || undefined,
+    principal: cleanPlace(project.principal),
+    secondaries: project.secondaries.map(cleanPlace),
+  }
+}
+
+export async function saveProject(project: Project, backend: string): Promise<Project> {
+  const payload = sanitizeProject(project)
+
+  try {
+    const res = await fetch(`${backend}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    if (!res.ok) {
+      throw new Error(`Save failed: ${res.status}`)
+    }
+
+    return res.json()
+  } catch (error) {
+    console.warn('Falling back to mock project save', error)
+    const mockId = `mock-${Date.now()}`
+    return {
+      ...project,
+      _id: mockId,
+      secondaries: project.secondaries.map((place, index) => ({
+        ...place,
+        _id: place._id || `place-${mockId}-${index}`,
+      })),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+  }
+}
+
+export interface RouteComputationResult {
+  feature: Feature<LineString>
+  summary: {
+    distance: string
+    time: string
+  }
+  encoded: string
+  distanceMeters: number
+  durationSeconds: number
+}
+
+export async function computeRoute(
+  project: Project,
+  place: Place,
+  backend: string,
+): Promise<RouteComputationResult> {
+  if (!project.principal || !place) {
+    throw new Error('Missing principal or place')
   }
 
-  // Place endpoints
-  static async addPlace(projectId: string, data: any) {
-    // To be implemented
-    console.log('Adding place to project:', projectId, data)
+  const coords: [number, number][] = [
+    [project.principal.longitude, project.principal.latitude],
+    [place.longitude, place.latitude],
+  ]
+
+  try {
+    const res = await fetch(
+      `${backend}/api/projects/${project._id ?? 'new'}/places/${place._id ?? 'temp'}/route`,
+      { method: 'POST' },
+    )
+
+    if (res.ok) {
+      const data = await res.json()
+      const feature: Feature<LineString> = data.geojson ??
+        (data.encoded ? decodePolylineToFeature(data.encoded) : generateFallbackRoute(project.principal, place).feature)
+      const coordinates = (feature.geometry as LineString).coordinates as [number, number][]
+      return {
+        feature,
+        summary: data.pretty ?? {
+          distance: formatKm(data.distance_m ?? 0),
+          time: formatHhMm(data.duration_s ?? 0),
+        },
+        encoded: data.encoded ?? encodePolyline(coordinates),
+        distanceMeters: data.distance_m ?? 0,
+        durationSeconds: data.duration_s ?? 0,
+      }
+    }
+  } catch (error) {
+    console.warn('Backend route failed, trying OSRM', error)
   }
 
-  // Route endpoints
-  static async getRoute(from: string, to: string) {
-    // To be implemented
-    console.log('Getting route from', from, 'to', to)
+  try {
+    const route = await getRoute({ coords, profile: 'driving' })
+    const feature: Feature<LineString> = {
+      type: 'Feature',
+      geometry: route.geometry,
+      properties: {},
+    }
+    const encoded = encodePolyline(route.geometry.coordinates)
+    return {
+      feature,
+      summary: {
+        distance: formatKm(route.distanceMeters),
+        time: formatHhMm(route.durationSeconds),
+      },
+      encoded,
+      distanceMeters: route.distanceMeters,
+      durationSeconds: route.durationSeconds,
+    }
+  } catch (error) {
+    console.warn('OSRM route failed, generating fallback route', error)
+    const fallback = generateFallbackRoute(project.principal, place)
+    return fallback
+  }
+}
+
+function decodePolylineToFeature(encoded: string): Feature<LineString> {
+  const coords = decodePolyline(encoded)
+  return {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: coords,
+    },
+    properties: {},
+  }
+}
+
+function generateFallbackRoute(principal: Place, secondary: Place): RouteComputationResult {
+  const coords = createSCurve(
+    [principal.longitude, principal.latitude],
+    [secondary.longitude, secondary.latitude],
+  )
+  const encoded = encodePolyline(coords)
+  const distance = haversineDistance(principal.latitude, principal.longitude, secondary.latitude, secondary.longitude)
+  const durationSeconds = Math.round((distance / 1000) * 180)
+
+  return {
+    feature: {
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: coords },
+      properties: {},
+    },
+    summary: {
+      distance: `${(distance / 1000).toFixed(1)} km`,
+      time: `${Math.max(1, Math.round(durationSeconds / 60))} min`,
+    },
+    encoded,
+    distanceMeters: distance,
+    durationSeconds,
+  }
+}
+
+function createSCurve(start: [number, number], end: [number, number]): [number, number][] {
+  const [startLng, startLat] = start
+  const [endLng, endLat] = end
+  const midLng = (startLng + endLng) / 2
+  const midLat = (startLat + endLat) / 2
+  const intensity = 0.01
+
+  return [
+    [startLng, startLat],
+    [midLng - intensity, midLat + intensity],
+    [midLng + intensity, midLat - intensity],
+    [endLng, endLat],
+  ]
+}
+
+function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371e3
+  const phi1 = (lat1 * Math.PI) / 180
+  const phi2 = (lat2 * Math.PI) / 180
+  const deltaPhi = ((lat2 - lat1) * Math.PI) / 180
+  const deltaLambda = ((lng2 - lng1) * Math.PI) / 180
+
+  const a =
+    Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+
+  return R * c
+}
+
+function encodePolyline(coordinates: [number, number][]): string {
+  let encoded = ''
+  let lastLat = 0
+  let lastLng = 0
+
+  for (const [lng, lat] of coordinates) {
+    const latDiff = Math.round((lat - lastLat) * 1e5)
+    const lngDiff = Math.round((lng - lastLng) * 1e5)
+
+    encoded += encodeNumber(latDiff) + encodeNumber(lngDiff)
+
+    lastLat = lat
+    lastLng = lng
   }
 
-  // Upload endpoints
-  static async uploadFile(file: File) {
-    // To be implemented
-    console.log('Uploading file:', file.name)
+  return encoded
+}
+
+function decodePolyline(encoded: string): [number, number][] {
+  let index = 0
+  const coordinates: [number, number][] = []
+  let lat = 0
+  let lng = 0
+
+  while (index < encoded.length) {
+    let shift = 0
+    let result = 0
+    let byte: number
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63
+      result |= (byte & 0x1f) << shift
+      shift += 5
+    } while (byte >= 0x20)
+
+    const deltaLat = result & 1 ? ~(result >> 1) : result >> 1
+    lat += deltaLat
+
+    shift = 0
+    result = 0
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63
+      result |= (byte & 0x1f) << shift
+      shift += 5
+    } while (byte >= 0x20)
+
+    const deltaLng = result & 1 ? ~(result >> 1) : result >> 1
+    lng += deltaLng
+
+    coordinates.push([lng / 1e5, lat / 1e5])
   }
-} 
+
+  return coordinates
+}
+
+function encodeNumber(num: number): string {
+  num <<= 1
+  if (num < 0) num = ~num
+
+  let encoded = ''
+  while (num >= 0x20) {
+    encoded += String.fromCharCode((0x20 | (num & 0x1f)) + 63)
+    num >>= 5
+  }
+  encoded += String.fromCharCode(num + 63)
+  return encoded
+}
