@@ -15,6 +15,8 @@ import projectRoutes from './routes/project.routes.js';
 import placeRoutes from './routes/place.routes.js';
 import uploadRoutes from './routes/upload.routes.js';
 import routeRoutes from './routes/route.routes.js';
+import assetRoutes from './routes/asset.routes.js';
+import placeTypeRoutes from './routes/placeType.routes.js';
 
 const app = express();
 
@@ -48,6 +50,8 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:projectId/places', placeRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/route', routeRoutes);
+app.use('/api/assets', assetRoutes);
+app.use('/api/place-types', placeTypeRoutes);
 
 
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Download, Loader2, Save } from 'lucide-react'
 import { ProjectHero } from '@/components/project/ProjectHero'
@@ -11,6 +11,7 @@ import { ExportProjectDialog } from '@/components/project/ExportProjectDialog'
 import { useStudio } from '@/lib/studioStore'
 import { saveProject } from '@/lib/api'
 import type { ExportOptions } from '@/types'
+import { useAssetLibrary } from '@/lib/assetLibraryStore'
 
 const DEFAULT_EXPORT: ExportOptions = {
   includeSecondaries: true,
@@ -25,12 +26,21 @@ export default function StudioPage() {
     backend: state.backend,
   }))
 
+  const fetchLibrary = useAssetLibrary((state) => state.fetchAll)
+  const libraryLoaded = useAssetLibrary((state) => state.initialized)
+
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT)
 
   const allPlaces = useMemo(() => [project.principal, ...project.secondaries], [project])
+
+  useEffect(() => {
+    if (!libraryLoaded) {
+      fetchLibrary(backend)
+    }
+  }, [backend, fetchLibrary, libraryLoaded])
 
   const ensureMediaIsValid = useCallback(() => {
     for (const place of allPlaces) {
