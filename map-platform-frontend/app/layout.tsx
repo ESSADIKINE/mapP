@@ -1,23 +1,23 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
-import 'maplibre-gl/dist/maplibre-gl.css'
+import type { Metadata } from 'next';
+import { DM_Sans } from 'next/font/google';
+import './globals.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
-const inter = Inter({ subsets: ['latin'] })
+const dmSans = DM_Sans({ subsets: ['latin'], display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'Map Platform',
-  description: 'Interactive mapping platform for projects and places',
-}
+  title: 'Atlas Studio',
+  description: 'Create immersive, high-performance map experiences with ease.'
+};
 
 export default function RootLayout({
-  children,
+  children
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={`${dmSans.className} min-h-screen antialiased`}>{children}</body>
     </html>
-  )
-} 
+  );
+}

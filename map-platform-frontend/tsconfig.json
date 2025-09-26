@@ -19,7 +19,12 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@radix-ui/react-tabs": ["./lib/radix/tabs"],
+      "@radix-ui/react-scroll-area": ["./lib/radix/scroll-area"],
+      "@radix-ui/react-tooltip": ["./lib/radix/tooltip"],
+      "@radix-ui/react-dropdown-menu": ["./lib/radix/dropdown-menu"],
+      "@radix-ui/react-avatar": ["./lib/radix/avatar"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
