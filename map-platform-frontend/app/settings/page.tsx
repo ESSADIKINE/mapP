@@ -7,6 +7,7 @@ import { useStudio } from '@/lib/studioStore'
 import { useAssetLibrary } from '@/lib/assetLibraryStore'
 import { uploadImage } from '@/lib/api'
 import type { AssetKind, LibraryAsset, PlaceTypeDefinition } from '@/types'
+import { toast } from '@/lib/toast'
 
 function useLibraryBootstrap(backend: string) {
   const fetchLibrary = useAssetLibrary((state) => state.fetchAll)
@@ -40,12 +41,12 @@ function AssetManagerSection({ title, description, type, backend }: AssetManager
 
   const handleUpload = useCallback(async () => {
     if (!file) {
-      alert('Select a file to upload.')
+      toast.warning('Select a file to upload.')
       return
     }
     const trimmedLabel = label.trim()
     if (!trimmedLabel) {
-      alert('Provide a label for this asset.')
+      toast.info('Provide a label for this asset.')
       return
     }
     setUploading(true)
@@ -59,9 +60,10 @@ function AssetManagerSection({ title, description, type, backend }: AssetManager
       })
       setLabel('')
       setFile(null)
+      toast.success('Asset uploaded to the library.')
     } catch (error) {
       console.error('Unable to create asset', error)
-      alert('Upload failed. Please try again or check your backend configuration.')
+      toast.error('Upload failed. Please try again or check your backend configuration.')
     } finally {
       setUploading(false)
     }
@@ -75,9 +77,10 @@ function AssetManagerSection({ title, description, type, backend }: AssetManager
       if (!trimmed || trimmed === asset.label) return
       try {
         await updateAsset(backend, asset._id, { label: trimmed })
+        toast.success('Asset renamed successfully.')
       } catch (error) {
         console.error('Rename failed', error)
-        alert('Unable to rename asset. Please try again.')
+        toast.error('Unable to rename asset. Please try again.')
       }
     },
     [backend, updateAsset],
@@ -88,9 +91,10 @@ function AssetManagerSection({ title, description, type, backend }: AssetManager
       if (!window.confirm(`Delete asset "${asset.label}"?`)) return
       try {
         await deleteAsset(backend, asset._id, type)
+        toast.success('Asset deleted.')
       } catch (error) {
         console.error('Delete failed', error)
-        alert('Unable to delete asset. Please try again.')
+        toast.error('Unable to delete asset. Please try again.')
       }
     },
     [backend, deleteAsset, type],
@@ -197,7 +201,7 @@ function PlaceTypeManagerSection({ backend }: PlaceTypeManagerSectionProps) {
   const handleCreate = useCallback(async () => {
     const trimmed = name.trim()
     if (!trimmed) {
-      alert('Provide a name for the place type.')
+      toast.info('Provide a name for the place type.')
       return
     }
     setSaving(true)
@@ -205,9 +209,10 @@ function PlaceTypeManagerSection({ backend }: PlaceTypeManagerSectionProps) {
       await createPlaceType(backend, { name: trimmed, description: description.trim() || undefined })
       setName('')
       setDescription('')
+      toast.success('Place type created.')
     } catch (error) {
       console.error('Unable to create place type', error)
-      alert('Creation failed. Please try again.')
+      toast.error('Creation failed. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -221,9 +226,10 @@ function PlaceTypeManagerSection({ backend }: PlaceTypeManagerSectionProps) {
       if (!trimmed || trimmed === type.name) return
       try {
         await updatePlaceType(backend, type._id, { name: trimmed })
+        toast.success('Place type renamed.')
       } catch (error) {
         console.error('Rename failed', error)
-        alert('Unable to rename place type. Please try again.')
+        toast.error('Unable to rename place type. Please try again.')
       }
     },
     [backend, updatePlaceType],
@@ -236,9 +242,10 @@ function PlaceTypeManagerSection({ backend }: PlaceTypeManagerSectionProps) {
       const trimmed = next.trim()
       try {
         await updatePlaceType(backend, type._id, { description: trimmed || undefined })
+        toast.success('Description updated.')
       } catch (error) {
         console.error('Update failed', error)
-        alert('Unable to update description. Please try again.')
+        toast.error('Unable to update description. Please try again.')
       }
     },
     [backend, updatePlaceType],
@@ -249,9 +256,10 @@ function PlaceTypeManagerSection({ backend }: PlaceTypeManagerSectionProps) {
       if (!window.confirm(`Delete place type "${type.name}"?`)) return
       try {
         await deletePlaceType(backend, type._id)
+        toast.success('Place type deleted.')
       } catch (error) {
         console.error('Delete failed', error)
-        alert('Unable to delete place type. Please try again.')
+        toast.error('Unable to delete place type. Please try again.')
       }
     },
     [backend, deletePlaceType],
