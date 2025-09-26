@@ -9,7 +9,7 @@ import { SecondaryPlacesPanel } from '@/components/project/SecondaryPlacesPanel'
 import { StudioMap } from '@/components/Map/StudioMap'
 import { ExportProjectDialog } from '@/components/project/ExportProjectDialog'
 import { useStudio } from '@/lib/studioStore'
-import { fetchProjectById, fetchProjectSummaries, saveProject } from '@/lib/api'
+import { fetchProjectById, fetchProjectSummaries, saveProject, computeAllRoutes } from '@/lib/api'
 import type { ExportOptions, ProjectSummary } from '@/types'
 import { useAssetLibrary } from '@/lib/assetLibraryStore'
 import { toast } from '@/lib/toast'
@@ -129,8 +129,17 @@ export default function StudioPage() {
 
     setExporting(true)
     try {
-      const saved = project._id ? project : await ensureProjectSaved()
-      if (!project._id) {
+      // First, compute routes for all places that don't have them
+      let projectWithRoutes = project
+      if (options.includeRoutes) {
+        console.log('Computing routes for all places before export...')
+        projectWithRoutes = await computeAllRoutes(project, backend)
+        // Update the project state with computed routes
+        setProject(projectWithRoutes)
+      }
+      
+      const saved = projectWithRoutes._id ? projectWithRoutes : await ensureProjectSaved()
+      if (!projectWithRoutes._id) {
         await loadProjects()
       }
       const payload = {
@@ -166,7 +175,7 @@ export default function StudioPage() {
     } finally {
       setExporting(false)
     }
-  }, [backend, ensureMediaIsValid, ensureProjectSaved, options.includeImages, options.includeRoutes, options.includeSecondaries, project])
+  }, [backend, ensureMediaIsValid, ensureProjectSaved, options.includeImages, options.includeRoutes, options.includeSecondaries, project, setProject])
 
   return (
     <main className="min-h-screen pb-16">

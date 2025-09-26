@@ -830,7 +830,13 @@
       detailMedia.classList.add('is-empty');
       detailMedia.textContent = 'Media preview unavailable';
     }
-    routeToggle.checked = false;
+    // Initialize route toggle based on whether route data exists
+    if (currentProject && currentProject.routes && currentProject.routes.length > 0) {
+      routeToggle.checked = true;
+      // The change event listener will automatically call showRoute()
+    } else {
+      routeToggle.checked = false;
+    }
     if (sticky) {
       stickyProject = project;
       previewProject = null;

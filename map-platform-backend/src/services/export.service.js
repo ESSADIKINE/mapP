@@ -11,7 +11,7 @@ import { download } from '../utils/download.js';
 /**
  * Normalize the DB doc into the export JSON consumed by the static bundle.
  */
-export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) {
+export function buildExportData(doc, { styleURL, profiles = ['driving'], includeRoutes = true } = {}) {
   if (!doc) throw new Error('NotFound');
   if (!doc.principal) throw new Error('NoPrincipal');
 
@@ -39,7 +39,8 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
 
   const secondaries = (doc.secondaries || []).map((s) => {
     const routes = [];
-    if (s.routesFromBase && s.routesFromBase.length) {
+    
+    if (includeRoutes && s.routesFromBase && s.routesFromBase.length) {
       s.routesFromBase.forEach((poly, idx) => {
         const coords = decodePolyline(poly);
         if (coords.length < 2) return;
@@ -100,7 +101,7 @@ export function buildExportData(doc, { styleURL, profiles = ['driving'] } = {}) 
  * @param {import('express').Response} res
  */
 export async function exportProject(projectId, options, res) {
-  const { inlineData = true, includeLocalLibs = true, inlineAssets = true } = options || {};
+  const { inlineData = true, includeLocalLibs = true, inlineAssets = true, includeRoutes = true } = options || {};
   
   // Get server URL from request or environment
   const serverUrl = res.req?.protocol && res.req?.get('host') 
@@ -116,7 +117,7 @@ export async function exportProject(projectId, options, res) {
   console.log('Principal model3d:', doc.principal?.model3d);
   console.log('Secondary models:', doc.secondaries?.map(s => ({ name: s.name, model3d: s.model3d })));
   
-  const data = buildExportData(doc, options);
+  const data = buildExportData(doc, { ...options, includeRoutes });
   const hasPlaceLogos = !!data.principal.logoUrl || data.secondaries.some((s) => s.logoUrl);
   
   console.log('Processed export data:');

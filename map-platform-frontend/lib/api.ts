@@ -31,6 +31,9 @@ export async function uploadImage(file: File, backend: string): Promise<UploadRe
 
 export function sanitizeProject(project: Project): Project {
   const cleanPlace = (place: Place): Place => {
+    // Convert routeSummary to routesFromBase for backend compatibility
+    const routesFromBase = place.routeSummary?.encoded ? [place.routeSummary.encoded] : place.routesFromBase || []
+    
     const cleaned: Place = {
       ...place,
       virtualtour: place.virtualtour || undefined,
@@ -43,6 +46,7 @@ export function sanitizeProject(project: Project): Project {
       placeType: place.placeType?.trim() || undefined,
       footerInfo: place.footerInfo,
       routeSummary: place.routeSummary,
+      routesFromBase, // Include the converted route data
     }
 
     return cleaned
@@ -88,6 +92,48 @@ export async function saveProject(project: Project, backend: string): Promise<Pr
       createdAt: project.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
+  }
+}
+
+export async function computeAllRoutes(project: Project, backend: string): Promise<Project> {
+  console.log('Computing routes for all places without routes...')
+  
+  const updatedSecondaries = await Promise.all(
+    project.secondaries.map(async (place) => {
+      // Skip if place already has route data
+      if (place.routeSummary?.encoded || place.routesFromBase?.length) {
+        console.log(`Place ${place.name} already has route data, skipping`)
+        return place
+      }
+      
+      try {
+        console.log(`Computing route for ${place.name}...`)
+        const result = await computeRoute(project, place, backend)
+        return {
+          ...place,
+          routeSummary: {
+            encoded: result.encoded,
+            distanceMeters: result.distanceMeters,
+            durationSeconds: result.durationSeconds,
+            pretty: result.summary,
+            geojson: result.feature,
+          },
+          footerInfo: {
+            ...place.footerInfo,
+            distance: result.summary.distance,
+            time: result.summary.time,
+          },
+        }
+      } catch (error) {
+        console.warn(`Failed to compute route for ${place.name}:`, error)
+        return place
+      }
+    })
+  )
+  
+  return {
+    ...project,
+    secondaries: updatedSecondaries,
   }
 }
 

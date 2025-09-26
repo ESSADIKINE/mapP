@@ -61,8 +61,21 @@ export const computeAndAttachRouteToSecondary = async (req, res) => {
     secondary.routesFromBase = [r.encoded];
     secondary.footerInfo = { ...(secondary.footerInfo || {}), distance: km, time: mins };
     await project.save();
+    
+    // Decode the polyline to get coordinates for GeoJSON
+    const coords = polyline.decode(r.encoded).map(([lat, lng]) => [lng, lat]);
+    const geojson = {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: coords
+      }
+    };
+    
     return res.json({
       encoded: r.encoded,
+      geojson: geojson,
       distance_m: r.distance,
       duration_s: r.duration,
       pretty: { distance: km, time: mins }
