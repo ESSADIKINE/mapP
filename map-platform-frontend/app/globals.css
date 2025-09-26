@@ -26,11 +26,13 @@
 /* Custom styles can be added here */
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #f9fafb 0%, #e8edf5 50%, #dfe8ff 100%);
+  min-height: 100vh;
 }
 
 /* MapLibre GL custom styles */
@@ -54,4 +56,61 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
-} 
+}
+
+.studio-marker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(-8px);
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.studio-marker[data-active='true'] {
+  transform: translateY(-14px) scale(1.05);
+  filter: drop-shadow(0 10px 14px rgba(0, 31, 63, 0.25));
+}
+
+.studio-marker[data-hovered='true'] {
+  transform: translateY(-12px) scale(1.03);
+}
+
+.studio-marker-inner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, #ffd700, #ccac00);
+  border: 3px solid #001f3f;
+  overflow: hidden;
+  color: #001f3f;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.studio-marker[data-category='Principal'] .studio-marker-inner {
+  background: radial-gradient(circle at top, #001f3f, #0b3166);
+  border-color: #ffd700;
+  color: #ffd700;
+}
+
+.studio-marker-inner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.studio-marker-caption {
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.92);
+  color: #001f3f;
+  white-space: nowrap;
+  box-shadow: 0 4px 10px rgba(0, 31, 63, 0.12);
+}

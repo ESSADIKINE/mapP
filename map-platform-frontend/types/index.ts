@@ -1,26 +1,33 @@
-// Placeholder for TypeScript type definitions
-// This will define the data structures used in the application
+import type { Feature } from 'geojson'
 
-export interface Project {
-  id: string
-  title: string
-  logoUrl?: string
-  description?: string
-  styleURL?: string
-  principal: Place
-  secondaries: Place[]
-  createdAt: string
-  updatedAt: string
+export type PlaceCategory = 'Principal' | 'Secondary' | 'Other'
+
+export interface PlaceFooterInfo {
+  location?: string
+  distance?: string
+  time?: string
+}
+
+export interface RouteSummary {
+  encoded?: string
+  distanceMeters?: number
+  durationSeconds?: number
+  pretty?: {
+    distance?: string
+    time?: string
+  }
+  geojson?: Feature
 }
 
 export interface Place {
-  id: string
+  _id?: string
   name: string
   latitude: number
   longitude: number
   virtualtour?: string
   tourUrl?: string
   googleMapsUrl?: string
+  logoUrl?: string
   zoom?: number
   bounds?: [number, number][]
   heading?: number
@@ -28,38 +35,34 @@ export interface Place {
   phone?: string
   description?: string
   placeType?: string
-  category: 'Principal' | 'Secondary' | 'Other'
+  category: PlaceCategory
   routesFromBase?: string[]
-  modelUrl?: string
-  modelPath?: string
-  model3d?: {
-    url: string
-    useAsMarker?: boolean
-    scale?: number
-    rotation?: [number, number, number]
-    altitude?: number
-  }
-  footerInfo?: {
-    location?: string
-    distance?: string
-    time?: string
-  }
+  footerInfo?: PlaceFooterInfo
+  routeSummary?: RouteSummary | null
 }
 
-export interface Route {
-  id: string
-  from: Place
-  to: Place
-  distance: number
-  duration: number
-  geometry: any
-  instructions: string[]
+export interface Project {
+  _id?: string
+  title: string
+  logoUrl?: string
+  description?: string
+  styleURL?: string
+  principal: Place
+  secondaries: Place[]
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface UploadResponse {
   url: string
-  publicId: string
-  format: string
-  width: number
-  height: number
-} 
+  public_id: string
+  bytes?: number
+  width?: number
+  height?: number
+}
+
+export interface ExportOptions {
+  includeSecondaries: boolean
+  includeRoutes: boolean
+  includeImages: boolean
+}
