@@ -3,10 +3,11 @@
 import { useCallback, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { MapPin, Route as RouteIcon, Trash2 } from 'lucide-react'
-import { computeRoute, prettyLatLng, uploadImage } from '@/lib/api'
+import { computeRoute, prettyLatLng } from '@/lib/api'
 import { useStudio } from '@/lib/studioStore'
-import type { Place } from '@/types'
-import { UploadField } from './UploadField'
+import type { LibraryAsset, Place } from '@/types'
+import { AssetSelectorField } from '@/components/library/AssetSelectorField'
+import { PlaceTypeSelectField } from '@/components/library/PlaceTypeSelectField'
 import { MediaPreview } from './MediaPreview'
 
 interface SecondaryPlaceCardProps {
@@ -35,20 +36,22 @@ export function SecondaryPlaceCard({ place }: SecondaryPlaceCardProps) {
     [placeId, replaceSecondary],
   )
 
-  const handleHeroUpload = useCallback(
-    async (file: File) => {
-      const response = await uploadImage(file, backend)
-      update({ virtualtour: response.url, tourUrl: undefined })
+  const handleHeroAsset = useCallback(
+    (asset: LibraryAsset | null) => {
+      if (asset) {
+        update({ virtualtour: asset.url, tourUrl: undefined })
+      } else {
+        update({ virtualtour: undefined })
+      }
     },
-    [backend, update],
+    [update],
   )
 
-  const handleLogoUpload = useCallback(
-    async (file: File) => {
-      const response = await uploadImage(file, backend)
-      update({ logoUrl: response.url })
+  const handleLogoAsset = useCallback(
+    (asset: LibraryAsset | null) => {
+      update({ logoUrl: asset?.url })
     },
-    [backend, update],
+    [update],
   )
 
   const handleRoute = useCallback(async () => {
@@ -121,14 +124,11 @@ export function SecondaryPlaceCard({ place }: SecondaryPlaceCardProps) {
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <label className="space-y-1 text-xs font-medium text-navy-700">
-          Place type
-          <input
-            value={place.placeType ?? ''}
-            onChange={(event) => update({ placeType: event.target.value })}
-            className="w-full rounded-xl border border-navy-100 px-3 py-2 text-sm focus:border-gold-400 focus:outline-none"
-          />
-        </label>
+        <PlaceTypeSelectField
+          label="Place type"
+          value={place.placeType}
+          onChange={(next) => update({ placeType: next })}
+        />
         <label className="space-y-1 text-xs font-medium text-navy-700">
           Google Maps link
           <input
@@ -193,24 +193,21 @@ export function SecondaryPlaceCard({ place }: SecondaryPlaceCardProps) {
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <UploadField
+        <AssetSelectorField
           label="360° image"
-          description="Drag & drop an immersive panorama"
-          previewUrl={place.virtualtour}
-          onUpload={handleHeroUpload}
-          onRemove={() => update({ virtualtour: undefined })}
-          cta="Upload 360° media"
-          accept={{ 'image/*': [] }}
+          description="Select a panorama from the library"
+          type="panorama"
+          value={place.virtualtour}
+          backend={backend}
+          onChange={handleHeroAsset}
         />
-        <UploadField
+        <AssetSelectorField
           label="Place logo"
           description="Logos replace legacy 3D models"
-          previewUrl={place.logoUrl}
-          onUpload={handleLogoUpload}
-          onRemove={() => update({ logoUrl: undefined })}
-          cta="Upload logo"
-          accept={{ 'image/*': [] }}
-          borderlessPreview
+          type="logo"
+          value={place.logoUrl}
+          backend={backend}
+          onChange={handleLogoAsset}
         />
       </div>
 

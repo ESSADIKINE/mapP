@@ -61,6 +61,28 @@ export interface UploadResponse {
   height?: number
 }
 
+export type AssetKind = 'logo' | 'panorama'
+
+export interface LibraryAsset {
+  _id: string
+  id?: string
+  type: AssetKind
+  label: string
+  url: string
+  publicId?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface PlaceTypeDefinition {
+  _id: string
+  id?: string
+  name: string
+  description?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
 export interface ExportOptions {
   includeSecondaries: boolean
   includeRoutes: boolean

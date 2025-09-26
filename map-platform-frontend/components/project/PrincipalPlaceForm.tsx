@@ -3,8 +3,10 @@
 import { useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useStudio } from '@/lib/studioStore'
-import { prettyLatLng, uploadImage } from '@/lib/api'
-import { UploadField } from './UploadField'
+import { prettyLatLng } from '@/lib/api'
+import type { LibraryAsset } from '@/types'
+import { AssetSelectorField } from '@/components/library/AssetSelectorField'
+import { PlaceTypeSelectField } from '@/components/library/PlaceTypeSelectField'
 import { MediaPreview } from './MediaPreview'
 
 export function PrincipalPlaceForm() {
@@ -21,20 +23,22 @@ export function PrincipalPlaceForm() {
     [principal.latitude, principal.longitude],
   )
 
-  const handleHeroUpload = useCallback(
-    async (file: File) => {
-      const response = await uploadImage(file, backend)
-      updatePrincipal({ virtualtour: response.url, tourUrl: undefined })
+  const handleHeroAsset = useCallback(
+    (asset: LibraryAsset | null) => {
+      if (asset) {
+        updatePrincipal({ virtualtour: asset.url, tourUrl: undefined })
+      } else {
+        updatePrincipal({ virtualtour: undefined })
+      }
     },
-    [backend, updatePrincipal],
+    [updatePrincipal],
   )
 
-  const handleLogoUpload = useCallback(
-    async (file: File) => {
-      const response = await uploadImage(file, backend)
-      updatePrincipal({ logoUrl: response.url })
+  const handleLogoAsset = useCallback(
+    (asset: LibraryAsset | null) => {
+      updatePrincipal({ logoUrl: asset?.url })
     },
-    [backend, updatePrincipal],
+    [updatePrincipal],
   )
 
   return (
@@ -84,14 +88,11 @@ export function PrincipalPlaceForm() {
             />
           </div>
         </div>
-        <label className="space-y-2 text-sm">
-          <span className="font-medium text-navy-800">Place type</span>
-          <input
-            value={principal.placeType ?? ''}
-            onChange={(event) => updatePrincipal({ placeType: event.target.value })}
-            className="w-full rounded-2xl border border-navy-100 px-4 py-2 text-sm focus:border-gold-400 focus:outline-none"
-          />
-        </label>
+        <PlaceTypeSelectField
+          label="Place type"
+          value={principal.placeType}
+          onChange={(next) => updatePrincipal({ placeType: next })}
+        />
         <label className="space-y-2 text-sm">
           <span className="font-medium text-navy-800">Google Maps link</span>
           <input
@@ -138,24 +139,21 @@ export function PrincipalPlaceForm() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <UploadField
+        <AssetSelectorField
           label="Hero panorama or 360° image"
-          description="Upload an equirectangular image"
-          previewUrl={principal.virtualtour}
-          onUpload={handleHeroUpload}
-          onRemove={() => updatePrincipal({ virtualtour: undefined })}
-          cta="Upload hero media"
-          accept={{ 'image/*': [] }}
+          description="Choose a panorama from your library"
+          type="panorama"
+          value={principal.virtualtour}
+          backend={backend}
+          onChange={handleHeroAsset}
         />
-        <UploadField
+        <AssetSelectorField
           label="Principal logo"
           description="This replaces legacy 3D models"
-          previewUrl={principal.logoUrl}
-          onUpload={handleLogoUpload}
-          onRemove={() => updatePrincipal({ logoUrl: undefined })}
-          cta="Upload logo"
-          accept={{ 'image/*': [] }}
-          borderlessPreview
+          type="logo"
+          value={principal.logoUrl}
+          backend={backend}
+          onChange={handleLogoAsset}
         />
       </div>
 

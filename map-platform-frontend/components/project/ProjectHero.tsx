@@ -3,8 +3,8 @@
 import { useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useStudio } from '@/lib/studioStore'
-import { uploadImage } from '@/lib/api'
-import { UploadField } from './UploadField'
+import type { LibraryAsset } from '@/types'
+import { AssetSelectorField } from '@/components/library/AssetSelectorField'
 
 export function ProjectHero() {
   const { project, updateProject, backend, setBackend } = useStudio((state) => ({
@@ -14,12 +14,11 @@ export function ProjectHero() {
     setBackend: state.setBackend,
   }))
 
-  const handleLogoUpload = useCallback(
-    async (file: File) => {
-      const response = await uploadImage(file, backend)
-      updateProject({ logoUrl: response.url })
+  const handleLogoChange = useCallback(
+    (asset: LibraryAsset | null) => {
+      updateProject({ logoUrl: asset?.url })
     },
-    [backend, updateProject],
+    [updateProject],
   )
 
   return (
@@ -50,14 +49,13 @@ export function ProjectHero() {
           {/* Advanced inputs removed per request */}
         </div>
         <div className="w-full max-w-xs">
-          <UploadField
+          <AssetSelectorField
             label="Project branding"
-            description="Recommended: transparent PNG or SVG"
-            previewUrl={project.logoUrl}
-            onUpload={handleLogoUpload}
-            onRemove={() => updateProject({ logoUrl: undefined })}
-            cta="Upload logo"
-            accept={{ 'image/*': [] }}
+            description="Logos are shared across your library"
+            type="logo"
+            value={project.logoUrl}
+            backend={backend}
+            onChange={handleLogoChange}
           />
         </div>
       </div>
