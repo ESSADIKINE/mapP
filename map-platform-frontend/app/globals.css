@@ -92,7 +92,7 @@ body {
 }
 
 .studio-marker[data-category='Principal'] .studio-marker-inner {
-  background: radial-gradient(circle at top, #001f3f, #0b3166);
+  background: transparent;
   border-color: #ffd700;
   color: #ffd700;
 }
@@ -103,8 +103,28 @@ body {
   object-fit: cover;
 }
 
+/* When a logo image is present, show it without any background/border */
+.studio-marker-inner.has-image {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  width: auto;
+  height: auto;
+  padding: 0;
+}
+.studio-marker-inner.has-image img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 44px;
+  max-height: 44px;
+  object-fit: contain;
+  border-radius: 0;
+}
+
 .studio-marker-caption {
-  margin-top: 6px;
+  margin-bottom: 6px;
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 0.65rem;

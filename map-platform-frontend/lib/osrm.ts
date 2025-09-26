@@ -110,17 +110,6 @@ export async function getRoute({ coords, profile, host = DEFAULT_HOST }: RoutePa
   };
 }
 
-// Minimal inline tests for format helpers
-// Run with vitest: `vitest run lib/osrm.test.ts`
-// These tests execute only when using Vitest's import.meta.vitest
-if (import.meta.vitest) {
-  const { it, expect } = import.meta.vitest;
-  it('formatKm', () => {
-    expect(formatKm(1234)).toBe('1.2 km');
-  });
-  it('formatHhMm', () => {
-    expect(formatHhMm(3660)).toBe('01:01');
-  });
-}
+// Note: Inline Vitest-specific code removed to avoid type errors in Next.js build
 
 export default getRoute;

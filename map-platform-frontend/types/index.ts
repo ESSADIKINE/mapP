@@ -66,3 +66,6 @@ export interface ExportOptions {
   includeRoutes: boolean
   includeImages: boolean
 }
+
+// Ambient declaration for untyped dependency
+declare module 'react-pannellum'

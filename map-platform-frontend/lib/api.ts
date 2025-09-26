@@ -146,7 +146,7 @@ export async function computeRoute(
       geometry: route.geometry,
       properties: {},
     }
-    const encoded = encodePolyline(route.geometry.coordinates)
+    const encoded = encodePolyline(route.geometry.coordinates as [number, number][])
     return {
       feature,
       summary: {

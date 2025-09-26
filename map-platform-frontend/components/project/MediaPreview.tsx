@@ -4,7 +4,7 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import * as Dialog from '@radix-ui/react-dialog'
 import { motion } from 'framer-motion'
-import { ExternalLink, Image360 } from 'lucide-react'
+import { ExternalLink, Globe } from 'lucide-react'
 
 const ReactPannellum = dynamic(() => import('react-pannellum'), { ssr: false })
 
@@ -40,7 +40,7 @@ export function MediaPreview({ name, virtualtour, tourUrl }: MediaPreviewProps) 
           onClick={open360}
           className="inline-flex items-center gap-2 rounded-full bg-gold-500 px-3 py-1.5 text-sm font-semibold text-navy-900 shadow-sm transition hover:bg-gold-400"
         >
-          <Image360 className="h-4 w-4" /> View 360°
+          <Globe className="h-4 w-4" /> View 360°
         </button>
       )}
       {tourUrl && (

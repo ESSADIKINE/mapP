@@ -13,6 +13,7 @@ export interface UploadFieldProps {
   onRemove?: () => void
   accept?: Record<string, string[]>
   cta?: string
+  borderlessPreview?: boolean
 }
 
 export function UploadField({
@@ -23,6 +24,7 @@ export function UploadField({
   onRemove,
   accept,
   cta = 'Upload',
+  borderlessPreview = false,
 }: UploadFieldProps) {
   const [loading, setLoading] = useState(false)
   const handleDrop = useCallback(
@@ -88,9 +90,11 @@ export function UploadField({
           layout
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="overflow-hidden rounded-2xl border border-navy-100 shadow-inner"
+          className={`overflow-hidden aspect-square ${
+            borderlessPreview ? 'rounded-none border-0 shadow-none' : 'rounded-2xl border border-navy-100 shadow-inner'
+          }`}
         >
-          <img src={previewUrl} alt={label} className="h-40 w-full object-cover" />
+          <img src={previewUrl} alt={label} className="w-full h-full object-cover" />
         </motion.div>
       )}
     </div>

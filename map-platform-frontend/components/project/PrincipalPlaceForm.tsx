@@ -155,6 +155,7 @@ export function PrincipalPlaceForm() {
           onRemove={() => updatePrincipal({ logoUrl: undefined })}
           cta="Upload logo"
           accept={{ 'image/*': [] }}
+          borderlessPreview
         />
       </div>
 

@@ -47,26 +47,7 @@ export function ProjectHero() {
               className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white placeholder:text-white/70 focus:border-gold-400 focus:outline-none focus:ring-2 focus:ring-gold-500/40"
             />
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-white/80">Map style URL (optional)</span>
-              <input
-                value={project.styleURL ?? ''}
-                onChange={(event) => updateProject({ styleURL: event.target.value })}
-                placeholder="https://tileserver.com/styles/custom"
-                className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/50 focus:border-gold-400 focus:outline-none focus:ring-2 focus:ring-gold-500/40"
-              />
-            </label>
-            <label className="space-y-2 text-sm">
-              <span className="font-medium text-white/80">Backend URL</span>
-              <input
-                value={backend}
-                onChange={(event) => setBackend(event.target.value)}
-                placeholder="http://localhost:4000"
-                className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm text-white placeholder:text-white/50 focus:border-gold-400 focus:outline-none focus:ring-2 focus:ring-gold-500/40"
-              />
-            </label>
-          </div>
+          {/* Advanced inputs removed per request */}
         </div>
         <div className="w-full max-w-xs">
           <UploadField

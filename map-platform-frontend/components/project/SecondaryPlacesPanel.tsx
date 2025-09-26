@@ -1,7 +1,7 @@
 'use client'
 
-import * as ScrollArea from '@radix-ui/react-scroll-area'
-import { AnimatePresence } from 'framer-motion'
+// Removed Radix ScrollArea to avoid rare ref/state update loops
+// Note: Avoid AnimatePresence inside Radix ScrollArea to prevent ref update loops
 import { Plus } from 'lucide-react'
 import { useStudio } from '@/lib/studioStore'
 import { SecondaryPlaceCard } from './SecondaryPlaceCard'
@@ -28,27 +28,19 @@ export function SecondaryPlacesPanel() {
         </button>
       </div>
 
-      <ScrollArea.Root className="relative -mx-2 flex-1">
-        <ScrollArea.Viewport className="h-full w-full px-2">
+      <div className="relative -mx-2 flex-1">
+        <div className="h-full w-full overflow-y-auto px-2">
           <div className="space-y-4 pb-6">
-            <AnimatePresence initial={false}>
-              {secondaries.map((place) => (
-                <SecondaryPlaceCard key={place._id} place={place} />
-              ))}
-            </AnimatePresence>
+            {secondaries.map((place) => (
+              <SecondaryPlaceCard key={place._id} place={place} />
+            ))}
             {secondaries.length === 0 && (
               <div className="rounded-3xl border border-dashed border-navy-200 bg-navy-50/50 p-6 text-center text-sm text-navy-600">
                 No secondary places yet. Add one to begin crafting your immersive route.
               </div>
             )}
           </div>
-        </ScrollArea.Viewport>
-        <ScrollArea.Scrollbar
-          orientation="vertical"
-          className="flex touch-none select-none border-l border-navy-100 bg-white/60"
-        >
-          <ScrollArea.Thumb className="relative flex-1 rounded-full bg-navy-200" />
-        </ScrollArea.Scrollbar>
-      </ScrollArea.Root>
+        </div>
+      </div>
     </section>
   )}

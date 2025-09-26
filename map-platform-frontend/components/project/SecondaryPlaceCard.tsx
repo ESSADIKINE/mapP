@@ -210,6 +210,7 @@ export function SecondaryPlaceCard({ place }: SecondaryPlaceCardProps) {
           onRemove={() => update({ logoUrl: undefined })}
           cta="Upload logo"
           accept={{ 'image/*': [] }}
+          borderlessPreview
         />
       </div>
 
