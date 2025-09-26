@@ -79,27 +79,68 @@ export const useAssetLibrary = create<AssetLibraryState>((set, get) => ({
   },
 
   createAsset: async (backend, payload) => {
-    const asset = await libraryApi.createAsset(backend, payload)
-    set((state) =>
-      payload.type === 'logo'
-        ? { logos: sortAssets([...state.logos.filter((item) => item._id !== asset._id), asset]) }
-        : { panoramas: sortAssets([...state.panoramas.filter((item) => item._id !== asset._id), asset]) },
-    )
-    return asset
+    try {
+      const asset = await libraryApi.createAsset(backend, payload)
+      set((state) =>
+        payload.type === 'logo'
+          ? { logos: sortAssets([...state.logos.filter((item) => item._id !== asset._id), asset]) }
+          : { panoramas: sortAssets([...state.panoramas.filter((item) => item._id !== asset._id), asset]) },
+      )
+      return asset
+    } catch (error) {
+      const fallback: LibraryAsset = {
+        _id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: payload.type,
+        label: payload.label,
+        url: payload.url,
+        publicId: payload.publicId,
+      }
+      set((state) =>
+        payload.type === 'logo'
+          ? { logos: sortAssets([...state.logos, fallback]) }
+          : { panoramas: sortAssets([...state.panoramas, fallback]) },
+      )
+      return fallback
+    }
   },
 
   updateAsset: async (backend, id, payload) => {
-    const asset = await libraryApi.updateAsset(backend, id, payload)
-    set((state) =>
-      asset.type === 'logo'
-        ? { logos: sortAssets(state.logos.map((item) => (item._id === asset._id ? asset : item))) }
-        : { panoramas: sortAssets(state.panoramas.map((item) => (item._id === asset._id ? asset : item))) },
-    )
-    return asset
+    try {
+      const asset = await libraryApi.updateAsset(backend, id, payload)
+      set((state) =>
+        asset.type === 'logo'
+          ? { logos: sortAssets(state.logos.map((item) => (item._id === asset._id ? asset : item))) }
+          : { panoramas: sortAssets(state.panoramas.map((item) => (item._id === asset._id ? asset : item))) },
+      )
+      return asset
+    } catch (error) {
+      let updated: LibraryAsset | undefined
+      set((state) => {
+        const updateArray = (arr: LibraryAsset[]) =>
+          arr.map((item) => {
+            if (item._id !== id) return item
+            updated = { ...item, ...payload }
+            return updated as LibraryAsset
+          })
+        return {
+          logos: sortAssets(updateArray(state.logos)),
+          panoramas: sortAssets(updateArray(state.panoramas)),
+        }
+      })
+      if (!updated) {
+        // If the item wasn't found locally, rethrow to surface the error
+        throw error
+      }
+      return updated
+    }
   },
 
   deleteAsset: async (backend, id, type) => {
-    await libraryApi.deleteAsset(backend, id)
+    try {
+      await libraryApi.deleteAsset(backend, id)
+    } catch (error) {
+      // Fall back to local deletion silently
+    }
     set((state) =>
       type === 'logo'
         ? { logos: state.logos.filter((item) => item._id !== id) }
