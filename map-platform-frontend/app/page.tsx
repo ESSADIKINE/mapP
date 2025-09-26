@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Download, Loader2, Save } from 'lucide-react'
+import { Download, Loader2, RefreshCw, Save } from 'lucide-react'
 import { ProjectHero } from '@/components/project/ProjectHero'
 import { PrincipalPlaceForm } from '@/components/project/PrincipalPlaceForm'
 import { SecondaryPlacesPanel } from '@/components/project/SecondaryPlacesPanel'
 import { StudioMap } from '@/components/Map/StudioMap'
 import { ExportProjectDialog } from '@/components/project/ExportProjectDialog'
 import { useStudio } from '@/lib/studioStore'
-import { saveProject } from '@/lib/api'
-import type { ExportOptions } from '@/types'
+import { fetchProjectById, fetchProjectSummaries, saveProject } from '@/lib/api'
+import type { ExportOptions, ProjectSummary } from '@/types'
 import { useAssetLibrary } from '@/lib/assetLibraryStore'
 import { toast } from '@/lib/toast'
 
@@ -21,10 +21,11 @@ const DEFAULT_EXPORT: ExportOptions = {
 }
 
 export default function StudioPage() {
-  const { project, setProject, backend } = useStudio((state) => ({
+  const { project, setProject, backend, resetProject } = useStudio((state) => ({
     project: state.project,
     setProject: state.setProject,
     backend: state.backend,
+    resetProject: state.resetProject,
   }))
 
   const fetchLibrary = useAssetLibrary((state) => state.fetchAll)
@@ -34,6 +35,10 @@ export default function StudioPage() {
   const [exporting, setExporting] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT)
+  const [projects, setProjects] = useState<ProjectSummary[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(false)
+  const [projectLoading, setProjectLoading] = useState(false)
+  const [selectedProjectId, setSelectedProjectId] = useState('')
 
   const allPlaces = useMemo(() => [project.principal, ...project.secondaries], [project])
 
@@ -42,6 +47,50 @@ export default function StudioPage() {
       fetchLibrary(backend)
     }
   }, [backend, fetchLibrary, libraryLoaded])
+
+  useEffect(() => {
+    setSelectedProjectId(project._id ?? '')
+  }, [project._id])
+
+  const loadProjects = useCallback(async () => {
+    setProjectsLoading(true)
+    try {
+      const items = await fetchProjectSummaries(backend)
+      setProjects(items)
+    } catch (error) {
+      console.error(error)
+      toast.error('Unable to load saved projects. Please verify the backend service.')
+    } finally {
+      setProjectsLoading(false)
+    }
+  }, [backend])
+
+  useEffect(() => {
+    void loadProjects()
+  }, [loadProjects])
+
+  const handleSelectProject = useCallback(
+    async (id: string) => {
+      setSelectedProjectId(id)
+      if (!id) {
+        resetProject()
+        return
+      }
+
+      setProjectLoading(true)
+      try {
+        const loaded = await fetchProjectById(id, backend)
+        setProject(loaded)
+        toast.success('Project loaded.')
+      } catch (error) {
+        console.error(error)
+        toast.error('Unable to load the selected project.')
+      } finally {
+        setProjectLoading(false)
+      }
+    },
+    [backend, resetProject, setProject],
+  )
 
   const ensureMediaIsValid = useCallback(() => {
     for (const place of allPlaces) {
@@ -72,7 +121,8 @@ export default function StudioPage() {
 
   const handleSave = useCallback(async () => {
     await ensureProjectSaved()
-  }, [ensureProjectSaved])
+    await loadProjects()
+  }, [ensureProjectSaved, loadProjects])
 
   const handleExport = useCallback(async () => {
     if (!ensureMediaIsValid()) return
@@ -80,6 +130,9 @@ export default function StudioPage() {
     setExporting(true)
     try {
       const saved = project._id ? project : await ensureProjectSaved()
+      if (!project._id) {
+        await loadProjects()
+      }
       const payload = {
         inlineAssets: options.includeImages,
         inlineData: options.includeImages,
@@ -125,6 +178,42 @@ export default function StudioPage() {
               <p className="text-sm text-navy-600">Design elegant tours powered by accessible Radix UI components and delightful motion.</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-col gap-1 text-xs text-navy-600">
+                <span className="font-semibold uppercase tracking-wide text-navy-700">Saved projects</span>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedProjectId}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      void handleSelectProject(value)
+                    }}
+                    disabled={projectsLoading || projectLoading}
+                    className="min-w-[12rem] rounded-xl border border-navy-200 px-3 py-1.5 text-sm text-navy-900 shadow-inner focus:border-gold-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <option value="">New project…</option>
+                    {projects.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.title || 'Untitled project'}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void loadProjects()}
+                    disabled={projectsLoading}
+                    className="inline-flex items-center gap-2 rounded-full border border-navy-200 px-3 py-1.5 text-xs font-semibold text-navy-700 transition hover:border-gold-400 hover:text-gold-600 disabled:cursor-not-allowed disabled:opacity-70"
+                    title="Refresh project list"
+                  >
+                    {projectsLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    )}
+                    Refresh
+                  </button>
+                  {projectLoading ? <Loader2 className="h-4 w-4 animate-spin text-navy-600" aria-label="Loading project" /> : null}
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={handleSave}
